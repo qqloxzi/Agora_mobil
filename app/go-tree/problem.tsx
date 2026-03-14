@@ -3,9 +3,9 @@
  * problemSet (problems.ts) kullanılır.
  */
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, Pressable, ScrollView, StyleSheet, Platform } from 'react-native';
+import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../src/context/AuthContext';
 import { GoBoardView } from '../../src/components/GoBoardView';
 import { getProblemsForCategory } from '../../src/data/problems';
@@ -23,7 +23,6 @@ function hasNoSolution(problem: Problem): boolean {
 export default function GoTreeProblemScreen() {
   const { topicId } = useLocalSearchParams<{ topicId: string }>();
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const { user } = useAuth();
 
   const problems = (topicId ? getProblemsForCategory(topicId) : []) as Problem[];
@@ -95,9 +94,9 @@ export default function GoTreeProblemScreen() {
   if (!topicId) {
     return (
       <View style={styles.centered}>
-        <Text className="text-gray-500">Konu seçilmedi.</Text>
+        <Text style={styles.emptyStateText}>Konu seçilmedi.</Text>
         <Pressable onPress={() => router.back()} style={styles.backBtn}>
-          <Text className="text-white font-semibold">Geri</Text>
+          <Text style={styles.exitBtnText}>Geri</Text>
         </Pressable>
       </View>
     );
@@ -105,107 +104,147 @@ export default function GoTreeProblemScreen() {
 
   if (problems.length === 0) {
     return (
-      <View style={[styles.container, { paddingTop: insets.top + 16, paddingHorizontal: 20 }]}>
-        <Pressable onPress={() => router.back()} style={styles.backLink}>
-          <Text className="text-blue-600 font-semibold">← Geri</Text>
-        </Pressable>
-        <View style={styles.emptyBox}>
-          <Text className="text-gray-500 text-center px-4">
-            Bu konu için henüz tsumego eklenmedi.
-          </Text>
-          <Text className="mt-2 text-sm text-gray-400">{topicId}</Text>
+      <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+        <View style={styles.containerInner}>
+          <Pressable onPress={() => router.back()} style={styles.backLink}>
+            <Text style={styles.emptyStateLink}>← Geri</Text>
+          </Pressable>
+          <View style={styles.emptyBox}>
+            <Text style={styles.emptyStateText}>
+              Bu konu için henüz tsumego eklenmedi.
+            </Text>
+            <Text style={styles.emptyStateSubtext}>{topicId}</Text>
+          </View>
         </View>
-      </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <ScrollView
-      className="flex-1 bg-gray-50"
-      contentContainerStyle={{
-        paddingTop: insets.top + 16,
-        paddingBottom: insets.bottom + 24,
-        paddingHorizontal: 20,
-      }}
-      showsVerticalScrollIndicator={false}>
-      <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.backLink}>
-          <Text className="text-blue-600 font-semibold">← Çıkış</Text>
-        </Pressable>
-        <Text style={styles.title} numberOfLines={1}>
-          {topicId}
-        </Text>
-        <Text style={styles.counter}>
-          {currentIndex + 1} / {problems.length}
-        </Text>
+    <SafeAreaView style={styles.screenWrap} edges={['top', 'left', 'right', 'bottom']}>
+      <View style={styles.screenInner}>
+        {/* 1. Üst bilgi çubuğu (Header) */}
+        <View style={styles.headerSection}>
+          <View style={styles.header}>
+            <Text style={styles.title} numberOfLines={1}>
+              {topicId} ({currentIndex + 1} / {problems.length})
+            </Text>
+            <Pressable onPress={() => router.back()} style={styles.exitBtn}>
+              <Text style={styles.exitBtnText}>× Çıkış</Text>
+            </Pressable>
+          </View>
+          <View style={styles.progressWrap}>
+            <View style={[styles.progressFill, { width: `${progressPercent}%` }]} />
+          </View>
+          {activeProblem?.description ? (
+            <View style={styles.infoPanel}>
+              <Text style={styles.infoPanelText} numberOfLines={4}>
+                {activeProblem.description}
+              </Text>
+            </View>
+          ) : null}
+        </View>
+
+        {/* 2. Go tahtası (merkezde, sabit oranlı) */}
+        <View style={styles.boardSection}>
+          <GoBoardView
+            key={`${activeProblem?.id ?? 0}-${resetKey}`}
+            problem={activeProblem!}
+            onSolve={handleSolve}
+            statusMessage={statusMessage}
+            setStatusMessage={setStatusMessage}
+          />
+        </View>
+
+        {/* 3. Alt kontrol butonları */}
+        <View style={styles.controls}>
+          <Pressable
+            onPress={handlePrev}
+            disabled={currentIndex === 0}
+            style={[styles.controlBtnGeri, currentIndex === 0 && styles.controlBtnDisabled]}>
+            <Text style={[styles.controlBtnGeriText, currentIndex === 0 && styles.controlBtnTextDisabled]}>
+              ← Geri
+            </Text>
+          </Pressable>
+          <Pressable onPress={handleRestart} style={styles.controlBtnRestart}>
+            <Text style={styles.controlBtnRestartText}>↻</Text>
+          </Pressable>
+          <Pressable
+            onPress={handleNextProblem}
+            disabled={!isNextActive}
+            style={[styles.controlBtnNext, !isNextActive && styles.controlBtnDisabled]}>
+            <Text style={[styles.controlBtnNextText, !isNextActive && styles.controlBtnTextDisabled]}>
+              {currentIndex >= problems.length - 1 ? 'Bitir' : 'Sonraki →'}
+            </Text>
+          </Pressable>
+        </View>
       </View>
-
-      {/* İlerleme çubuğu (GameManager progress bar) */}
-      <View style={styles.progressWrap}>
-        <View style={[styles.progressFill, { width: `${progressPercent}%` }]} />
-      </View>
-
-      {activeProblem?.description ? (
-        <Text className="text-gray-600 text-sm mb-4">{activeProblem.description}</Text>
-      ) : null}
-
-      <GoBoardView
-        key={`${activeProblem?.id ?? 0}-${resetKey}`}
-        problem={activeProblem!}
-        onSolve={handleSolve}
-        statusMessage={statusMessage}
-        setStatusMessage={setStatusMessage}
-      />
-
-      {/* Alt kontroller: Geri, Yeniden Başlat, Sonraki / Bitir (GameManager game-controls-bottom) */}
-      <View style={styles.controls}>
-        <Pressable
-          onPress={handlePrev}
-          disabled={currentIndex === 0}
-          style={[styles.controlBtn, currentIndex === 0 && styles.controlBtnDisabled]}>
-          <Text style={[styles.controlBtnText, currentIndex === 0 && styles.controlBtnTextDisabled]}>
-            ← Geri
-          </Text>
-        </Pressable>
-        <Pressable onPress={handleRestart} style={[styles.controlBtn, styles.controlBtnRestart]}>
-          <Text style={styles.controlBtnText}>↺</Text>
-        </Pressable>
-        <Pressable
-          onPress={handleNextProblem}
-          disabled={!isNextActive}
-          style={[styles.controlBtn, styles.controlBtnNext, !isNextActive && styles.controlBtnDisabled]}>
-          <Text style={[styles.controlBtnTextNext, !isNextActive && styles.controlBtnTextDisabled]}>
-            {currentIndex >= problems.length - 1 ? 'Bitir' : 'Sonraki →'}
-          </Text>
-        </Pressable>
-      </View>
-    </ScrollView>
+    </SafeAreaView>
   );
 }
+
+const BG_DARK = '#1C263A';
+const PANEL_DARK = '#10162A';
+const PROGRESS_GREEN = '#00C897';
+const PROGRESS_TRACK = '#0d1220';
 
 const styles = StyleSheet.create({
   centered: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#f9fafb',
+    backgroundColor: BG_DARK,
   },
   container: {
     flex: 1,
-    backgroundColor: '#f9fafb',
+    backgroundColor: BG_DARK,
   },
-  backBtn: {
-    marginTop: 16,
-    borderRadius: 8,
-    backgroundColor: '#1f2937',
-    paddingHorizontal: 16,
+  containerInner: {
+    flex: 1,
+    paddingHorizontal: 20,
+  },
+  screenWrap: {
+    flex: 1,
+    backgroundColor: BG_DARK,
+  },
+  screenInner: {
+    flex: 1,
+    paddingHorizontal: 20,
+    flexDirection: 'column',
+    justifyContent: 'space-between',
+  },
+  headerSection: {
+    flexShrink: 1,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  title: {
+    flex: 1,
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#fff',
+    marginRight: 12,
+  },
+  exitBtn: {
+    backgroundColor: '#dc2626',
+    borderRadius: 9999,
     paddingVertical: 8,
+    paddingHorizontal: 16,
+  },
+  exitBtnText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '600',
   },
   backLink: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 8,
-    marginBottom: 8,
+    marginBottom: 0,
   },
   emptyBox: {
     flex: 1,
@@ -214,76 +253,111 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 2,
     borderStyle: 'dashed',
-    borderColor: '#d1d5db',
-    backgroundColor: '#fff',
+    borderColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: PANEL_DARK,
     paddingVertical: 48,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  title: {
-    flex: 1,
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#111827',
-    textAlign: 'center',
-  },
-  counter: {
-    fontSize: 14,
-    color: '#6b7280',
-    opacity: 0.8,
+  backBtn: {
+    marginTop: 16,
+    borderRadius: 8,
+    backgroundColor: PANEL_DARK,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
   },
   progressWrap: {
-    height: 6,
-    backgroundColor: '#e5e7eb',
+    height: 5,
+    backgroundColor: PROGRESS_TRACK,
     borderRadius: 3,
     overflow: 'hidden',
-    marginBottom: 16,
+    marginBottom: 10,
   },
   progressFill: {
     height: '100%',
-    backgroundColor: '#1d4ed8',
+    backgroundColor: PROGRESS_GREEN,
     borderRadius: 3,
+  },
+  infoPanel: {
+    backgroundColor: PANEL_DARK,
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 4,
+  },
+  infoPanelText: {
+    color: '#fff',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  boardSection: {
+    flex: 1,
+    width: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    minHeight: 0,
   },
   controls: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     gap: 12,
-    marginTop: 24,
+    paddingTop: 12,
+    paddingBottom: 8,
+    flexShrink: 0,
   },
-  controlBtn: {
+  controlBtnGeri: {
     paddingVertical: 12,
     paddingHorizontal: 20,
     borderRadius: 9999,
-    backgroundColor: '#f3f4f6',
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
+    backgroundColor: '#2a3142',
+  },
+  controlBtnGeriText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#fff',
   },
   controlBtnDisabled: {
     opacity: 0.5,
   },
   controlBtnRestart: {
-    paddingHorizontal: 16,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  controlBtnRestartText: {
+    fontSize: 22,
+    color: '#ea580c',
+    fontWeight: '600',
   },
   controlBtnNext: {
-    backgroundColor: '#1f2937',
-    borderColor: '#1f2937',
-  },
-  controlBtnText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#374151',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 9999,
+    backgroundColor: '#2a3142',
   },
   controlBtnTextDisabled: {
-    color: '#9ca3af',
+    color: 'rgba(255,255,255,0.6)',
   },
-  controlBtnTextNext: {
+  controlBtnNextText: {
     fontSize: 15,
     fontWeight: '600',
     color: '#fff',
+  },
+  emptyStateText: {
+    color: 'rgba(255,255,255,0.9)',
+    fontSize: 16,
+    textAlign: 'center',
+    paddingHorizontal: 24,
+  },
+  emptyStateSubtext: {
+    marginTop: 8,
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.5)',
+  },
+  emptyStateLink: {
+    color: '#60a5fa',
+    fontWeight: '600',
+    fontSize: 16,
   },
 });

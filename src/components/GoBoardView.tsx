@@ -11,6 +11,7 @@ import {
   Pressable,
   Animated,
   type ViewStyle,
+  type TextStyle,
 } from 'react-native';
 import type { SolutionNode, Problem } from '../types/tsumego';
 import {
@@ -18,7 +19,6 @@ import {
   type GoState,
   playMove as enginePlayMove,
   stepBack as engineStepBack,
-  playPass as enginePlayPass,
   parseInitialState,
   getHoshiPoints,
   parseLabels,
@@ -43,10 +43,15 @@ export function GoBoardView({
   statusMessage: string;
   setStatusMessage: (msg: string) => void;
 }) {
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const boardSize = Math.max(1, Math.min(19, problem.size ?? 9));
   const padding = 12;
-  const boardWidth = Math.min(Math.max(0, width * 0.9), 400);
+  const maxBoardByHeight = height * 0.45;
+  const boardWidth = Math.min(
+    Math.max(0, width * 0.9),
+    400,
+    maxBoardByHeight
+  );
   const innerSize = Math.max(0, boardWidth - 2 * padding);
   const cellPx =
     boardSize > 1 && innerSize > 0 ? innerSize / (boardSize - 1) : Math.max(1, innerSize);
@@ -71,6 +76,9 @@ export function GoBoardView({
   const moveTreeRef = useRef(moveTree);
   moveTreeRef.current = moveTree;
 
+  const gameStateRef = useRef<GoState>(gameState);
+  gameStateRef.current = gameState;
+
   const isSolvedRef = useRef(false);
   const isComputingRef = useRef(false);
   const shakeAnim = useRef(new Animated.Value(0)).current;
@@ -85,7 +93,9 @@ export function GoBoardView({
         Animated.timing(wrongFlashAnim, { toValue: 1, duration: 80, useNativeDriver: true }),
         Animated.timing(wrongFlashAnim, { toValue: 0, duration: 350, useNativeDriver: true }),
       ]),
-    ]).start();
+    ]).start(({ finished }) => {
+      if (finished) shakeAnim.setValue(0);
+    });
   }, [shakeAnim, wrongFlashAnim]);
 
   const labels = parseLabels(problem.labels ?? '[]', boardSize);
@@ -95,24 +105,25 @@ export function GoBoardView({
   const coordMarginV = 14;
   const coordFontSize = Math.max(10, Math.min(12, cellPx * 0.45));
 
-  // Sadece problem kimliği ve ilkel değerler: moveTree/solution her render'da yeni referans
-  // olduğu için bağımlılığa koymuyoruz; reset içinde güncel problem.solution kullanılır.
+  // Sadece problem.id değişince sıfırla; parent onSolve(true) ile re-render olsa bile tahta sıfırlanmasın.
   const resetBoard = useCallback(() => {
     const tree = ensureSolutionRoot(problem.solution);
-    setGameState({
+    const nextState: GoState = {
       size: problem.size,
       stones: parseInitialState(problem.initialState, problem.size),
       turn: problem.turn,
       history: [],
       lastMove: null,
-    });
+    };
+    setGameState(nextState);
+    gameStateRef.current = nextState;
     setIsLocked(false);
     setIsSolved(false);
     isSolvedRef.current = false;
     nodeStackRef.current = [tree];
     currentNodeRef.current = tree;
     moveTreeRef.current = tree;
-  }, [problem.id, problem.size, problem.initialState, problem.turn]);
+  }, [problem.id]);
 
   useEffect(() => {
     resetBoard();
@@ -143,12 +154,6 @@ export function GoBoardView({
       setStatusMessage('Geri alınacak hamle yok.');
     }
   }, [gameState, initialStateStr, hasSolution, isLocked]);
-
-  const handlePass = useCallback(() => {
-    if (isLocked || (hasSolution && !isSolved)) return;
-    setGameState(enginePlayPass(gameState));
-    setStatusMessage('');
-  }, [gameState, isLocked, hasSolution, isSolved]);
 
   const checkStatus = useCallback(
     (node: SolutionNode) => {
@@ -224,9 +229,10 @@ export function GoBoardView({
         if (nextNode.children && nextNode.children.length > 0) {
           isComputingRef.current = true;
           const response = nextNode.children[0];
-          const size = gameState.size;
           setTimeout(() => {
             try {
+              const state = gameStateRef.current;
+              const size = state.size;
               const respColor = response.color as StoneColor;
               const rx = response.x;
               const ry = response.y;
@@ -236,12 +242,16 @@ export function GoBoardView({
                 rx >= 0 &&
                 rx < size &&
                 ry >= 0 &&
-                ry < size &&
-                applyMove(rx, ry, respColor)
+                ry < size
               ) {
-                nodeStackRef.current.push(response);
-                currentNodeRef.current = response;
-                checkStatus(response);
+                const result = enginePlayMove(rx, ry, respColor, state);
+                if (result.success) {
+                  setGameState(result.state);
+                  gameStateRef.current = result.state;
+                  nodeStackRef.current.push(response);
+                  currentNodeRef.current = response;
+                  checkStatus(response);
+                }
               }
             } finally {
               isComputingRef.current = false;
@@ -265,21 +275,27 @@ export function GoBoardView({
   );
 
   const handleBoardPress = useCallback(
-    (ev: { nativeEvent: { locationX: number; locationY: number } }) => {
-      const safePadding = Number(padding) || 12;
+    (ev: { nativeEvent: { locationX?: number; locationY?: number; offsetX?: number; offsetY?: number } }) => {
       const safeCellPx = Number(cellPx);
       if (!Number.isFinite(safeCellPx) || safeCellPx <= 0 || boardSize < 1) return;
-      const { locationX, locationY } = ev.nativeEvent;
-      const rawCol = (Number(locationX) - safePadding) / safeCellPx;
-      const rawRow = (Number(locationY) - safePadding) / safeCellPx;
+      const native = ev.nativeEvent as { locationX?: number; locationY?: number; offsetX?: number; offsetY?: number };
+      let locX = Number(native.offsetX ?? native.locationX);
+      let locY = Number(native.offsetY ?? native.locationY);
+      if (!Number.isFinite(locX)) locX = 0;
+      if (!Number.isFinite(locY)) locY = 0;
+      const rawCol = locX / safeCellPx;
+      const rawRow = locY / safeCellPx;
       const col = Math.floor(rawCol + 0.5);
       const row = Math.floor(rawRow + 0.5);
       const c = Math.max(0, Math.min(boardSize - 1, col));
       const r = Math.max(0, Math.min(boardSize - 1, row));
       if (Number.isNaN(r) || Number.isNaN(c) || !Number.isFinite(r) || !Number.isFinite(c)) return;
+      if (__DEV__) {
+        console.log('GoBoardView touch:', { locX, locY, cellPx: safeCellPx, row: r, col: c });
+      }
       handleCellPress(r, c);
     },
-    [handleCellPress, cellPx, padding, boardSize]
+    [handleCellPress, cellPx, boardSize]
   );
 
   const { stones, turn, lastMove } = gameState;
@@ -312,18 +328,21 @@ export function GoBoardView({
       <Text style={styles.turnLabel}>
         {gameState.turn === 'white' ? 'Beyaz' : 'Siyah'} oynar
       </Text>
-      {statusMessage ? (
-        <Text
-          style={[
-            styles.statusText,
-            statusMessage.includes('Yanlış') || statusMessage.includes('Yasak') || statusMessage.includes('Ko')
-              ? styles.statusWrong
-              : styles.statusCorrect,
-          ]}>
-          {statusMessage}
-        </Text>
-      ) : null}
-      <View style={[styles.coordWrapper, coordWrap]}>
+      <View style={styles.statusMessageSlot}>
+        {statusMessage ? (
+          <Text
+            style={[
+              styles.statusText,
+              statusMessage.includes('Yanlış') || statusMessage.includes('Yasak') || statusMessage.includes('Ko')
+                ? styles.statusWrong
+                : styles.statusCorrect,
+            ]}>
+            {statusMessage}
+          </Text>
+        ) : null}
+      </View>
+      <View style={styles.boardCenterWrap}>
+        <View style={[styles.coordWrapper, coordWrap]}>
         {coordLabels.cols.map((letter, col) => (
           <View
             key={`top-${col}`}
@@ -385,7 +404,7 @@ export function GoBoardView({
       <Animated.View
         style={[
           boardShakeStyle,
-          { position: 'absolute', left: coordMarginH, top: coordMarginV, pointerEvents: 'box-none' },
+          { position: 'absolute', left: coordMarginH, top: coordMarginV, width: boardWidth, height: boardWidth },
         ]}>
         <Animated.View
           style={[
@@ -399,7 +418,7 @@ export function GoBoardView({
             },
           ]}
         />
-        <Pressable style={[boardStyles.board, { zIndex: 2 }]} onPress={handleBoardPress}>
+        <View style={[boardStyles.board, { zIndex: 1 }]}>
           {Array.from({ length: boardSize - 1 }, (_, row) =>
             Array.from({ length: boardSize - 1 }, (_, col) => (
               <View
@@ -414,6 +433,7 @@ export function GoBoardView({
                     height: cellPx,
                     borderRightWidth: 1,
                     borderBottomWidth: 1,
+                    pointerEvents: 'none',
                   },
                 ]}
               />
@@ -487,24 +507,28 @@ export function GoBoardView({
               );
             })
           )}
-        </Pressable>
+        </View>
+        <Pressable
+          style={{
+            position: 'absolute',
+            left: padding,
+            top: padding,
+            width: innerSize,
+            height: innerSize,
+            zIndex: 2,
+          }}
+          onPress={handleBoardPress}
+        />
       </Animated.View>
+        </View>
       </View>
       <View style={styles.buttonRow}>
         <Pressable
           onPress={handleStepBack}
           style={({ pressed }) => [styles.undoBtn, pressed && styles.undoBtnPressed]}
         >
-          <Text style={styles.undoBtnText}>↩ Geri Al</Text>
+          <Text style={styles.undoBtnText}>⤾ Geri Al</Text>
         </Pressable>
-        {(!hasSolution || isSolved) && (
-          <Pressable
-            onPress={handlePass}
-            style={({ pressed }) => [styles.undoBtn, pressed && styles.undoBtnPressed]}
-          >
-            <Text style={styles.undoBtnText}>Pas</Text>
-          </Pressable>
-        )}
       </View>
     </View>
   );
@@ -522,23 +546,23 @@ function createBoardStyles(
   stone: ViewStyle;
   lastMove: ViewStyle;
   hoshi: ViewStyle;
-  label: ViewStyle;
+  label: TextStyle;
 } {
   return {
     board: {
       width: boardWidth,
       height: boardWidth,
       padding,
-      backgroundColor: '#f4b35f',
+      backgroundColor: '#E6AA5D',
       borderRadius: 4,
-      overflow: 'hidden',
+      overflow: 'visible',
       position: 'relative',
       borderLeftWidth: 1,
       borderTopWidth: 1,
       borderColor: '#2b1d0e',
     },
     gridCell: {
-      borderColor: '#2b1d0e',
+      borderColor: '#000',
     },
     intersectionWrap: {
       position: 'absolute',
@@ -560,7 +584,7 @@ function createBoardStyles(
     },
     label: {
       position: 'absolute',
-      color: '#374151',
+      color: '#1f2937',
       fontWeight: '600',
     },
   };
@@ -568,7 +592,18 @@ function createBoardStyles(
 
 const styles = StyleSheet.create({
   wrapper: {
+    width: '100%',
+    flex: 1,
+    flexDirection: 'column',
     alignItems: 'center',
+    justifyContent: 'flex-start',
+  },
+  boardCenterWrap: {
+    flex: 1,
+    width: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    minHeight: 0,
   },
   coordWrapper: {
     position: 'relative',
@@ -598,47 +633,51 @@ const styles = StyleSheet.create({
     paddingLeft: 4,
   },
   coordText: {
-    color: '#6b7280',
+    color: '#e5e7eb',
     fontWeight: '500',
   },
   turnLabel: {
-    marginBottom: 8,
+    marginBottom: 4,
     fontSize: 14,
     fontWeight: '500',
-    color: '#92400e',
+    color: '#e5e7eb',
+  },
+  statusMessageSlot: {
+    minHeight: 36,
+    justifyContent: 'center',
+    marginBottom: 2,
   },
   statusText: {
-    marginBottom: 8,
     fontSize: 14,
     fontWeight: '600',
   },
   statusCorrect: {
-    color: '#059669',
+    color: '#34d399',
   },
   statusWrong: {
-    color: '#dc2626',
+    color: '#f87171',
   },
   buttonRow: {
     flexDirection: 'row',
-    marginTop: 16,
+    marginTop: 8,
     gap: 12,
     flexWrap: 'wrap',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   undoBtn: {
     paddingVertical: 10,
     paddingHorizontal: 20,
     borderRadius: 9999,
-    backgroundColor: '#f3f4f6',
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
+    backgroundColor: '#fff',
+    borderWidth: 0,
   },
   undoBtnPressed: {
-    opacity: 0.8,
+    opacity: 0.9,
   },
   undoBtnText: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#374151',
+    color: '#ea580c',
   },
 });

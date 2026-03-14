@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, ScrollView, Pressable, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, Pressable, ActivityIndicator, Platform } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -116,12 +116,20 @@ export default function GoTreeScreen() {
   useFocusEffect(
     useCallback(() => {
       loadProgress();
+      return () => {
+        if (Platform.OS === 'web' && typeof document !== 'undefined' && document.activeElement instanceof HTMLElement) {
+          document.activeElement.blur();
+        }
+      };
     }, [loadProgress])
   );
 
   const handleNodePress = useCallback(
     (nodeId: string, locked: boolean) => {
       if (locked) return;
+      if (Platform.OS === 'web' && typeof document !== 'undefined' && document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur();
+      }
       router.push({ pathname: '/go-tree/problem', params: { topicId: nodeId } });
     },
     [router]

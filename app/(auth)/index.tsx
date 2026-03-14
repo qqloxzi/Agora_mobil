@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as WebBrowser from 'expo-web-browser';
-import * as Linking from 'expo-linking';
+import * as AuthSession from 'expo-auth-session';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../src/lib/supabase';
@@ -37,7 +37,7 @@ export default function LoginScreen() {
           (window as unknown as { location?: { origin?: string } }).location?.origin
           ? (window as unknown as { location: { origin: string } }).location.origin + '/goagaci'
           : undefined
-        : Linking.createURL('/(tabs)');
+        : AuthSession.makeRedirectUri({ scheme: 'agoramobil' });
 
     const { data, error: oauthError } = await supabase.auth.signInWithOAuth({
       provider: 'google',
