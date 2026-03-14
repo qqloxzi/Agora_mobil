@@ -3,6 +3,7 @@
  * Karanlık mod varsayılan.
  */
 import { colors } from './colors';
+import { shadowStyle } from '../lib/shadowStyle';
 
 export const theme = {
   colors,
@@ -12,14 +13,10 @@ export const theme = {
     button: 9999,
     input: 12,
   },
-  /** Gölge (login kartı) */
+  /** Gölge (login kartı) – web: boxShadow, native: shadow* */
   shadow: {
     card: {
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 12 },
-      shadowOpacity: 0.35,
-      shadowRadius: 24,
-      elevation: 12,
+      ...shadowStyle({ width: 0, height: 12 }, 24, 0.35, '#000', 12),
     },
   },
 } as const;

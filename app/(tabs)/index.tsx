@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router';
 import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { shadowStyle } from '../../src/lib/shadowStyle';
 
 const LIGLER = [
   { label: 'Temel Taşlar Ligi', slug: 'temel-taslar' },
@@ -81,10 +82,6 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   cardShadow: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 15 },
-    shadowOpacity: 0.05,
-    shadowRadius: 30,
-    elevation: 8,
+    ...shadowStyle({ width: 0, height: 15 }, 30, 0.05, '#000', 8),
   },
 });

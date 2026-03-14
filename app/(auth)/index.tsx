@@ -15,6 +15,7 @@ import * as Linking from 'expo-linking';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../src/lib/supabase';
+import { shadowStyle } from '../../src/lib/shadowStyle';
 import { useAuth } from '../../src/context/AuthContext';
 
 export default function LoginScreen() {
@@ -91,13 +92,7 @@ export default function LoginScreen() {
         {/* Konteyner: beyaz, rounded-3xl, shadow-xl */}
         <View
           className="w-full max-w-md self-center rounded-3xl bg-white px-6 py-8"
-          style={{
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 10 },
-            shadowOpacity: 0.12,
-            shadowRadius: 20,
-            elevation: 12,
-          }}>
+          style={shadowStyle({ width: 0, height: 10 }, 20, 0.12, '#000', 12)}>
           <Text className="text-2xl font-bold text-[#1e3a5f] mb-1">Agora'ya Hoşgeldiniz</Text>
           <Text className="text-sm text-gray-500 mb-6">
             İlerlemenizi kaydetmek için giriş yapabilirsiniz.

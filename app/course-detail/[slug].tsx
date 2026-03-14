@@ -13,11 +13,12 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { getCourseBySlug, getKyuRangeLabel, parseOutcomes, formatDateRange } from '../../src/lib/courses';
+import { shadowStyle } from '../../src/lib/shadowStyle';
 import type { CourseDetail } from '../../src/types/course';
 
 function OutcomeItem({ text }: { text: string }) {
   return (
-    <View className="flex-row items-center gap-3 p-4 bg-white rounded-xl border border-gray-100 mb-3" style={{ shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 4, elevation: 2 }}>
+    <View className="flex-row items-center gap-3 p-4 bg-white rounded-xl border border-gray-100 mb-3" style={shadowStyle({ width: 0, height: 1 }, 4, 0.04, '#000', 2)}>
       <View className="w-6 h-6 rounded-full bg-emerald-100 items-center justify-center">
         <Ionicons name="checkmark" size={16} color="#059669" />
       </View>
@@ -136,7 +137,7 @@ export default function CourseDetailScreen() {
         </Pressable>
 
         {/* Özet barı: Eğitmen, Kayıt Durumu, Seviye, Toplam Saat */}
-        <View className="flex-row flex-wrap justify-between gap-2 py-4 px-4 rounded-xl bg-white border border-gray-200 mb-6" style={{ shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 4, elevation: 2 }}>
+        <View className="flex-row flex-wrap justify-between gap-2 py-4 px-4 rounded-xl bg-white border border-gray-200 mb-6" style={shadowStyle({ width: 0, height: 1 }, 4, 0.04, '#000', 2)}>
           <View className="items-center min-w-[70]">
             <Text className="text-[10px] font-bold text-gray-400 uppercase mb-1">Eğitmen</Text>
             <Text className="text-sm font-semibold text-gray-900" numberOfLines={1}>{providerName}</Text>

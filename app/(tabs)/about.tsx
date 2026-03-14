@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, ScrollView, Image, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { shadowStyle } from '../../src/lib/shadowStyle';
 
 interface TeamMember {
   name: string;
@@ -32,7 +33,7 @@ const TEAM: TeamMember[] = [
 
 function TeamCard({ member }: { member: TeamMember }) {
   return (
-    <View className="rounded-2xl bg-white border border-gray-200 overflow-hidden mb-6" style={{ shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 3 }}>
+    <View className="rounded-2xl bg-white border border-gray-200 overflow-hidden mb-6" style={shadowStyle({ width: 0, height: 2 }, 8, 0.06, '#000', 3)}>
       <View className="w-full aspect-square bg-gray-100">
         <Image source={{ uri: member.avatarUri }} className="w-full h-full" resizeMode="cover" />
       </View>

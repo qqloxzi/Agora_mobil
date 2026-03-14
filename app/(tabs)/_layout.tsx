@@ -29,7 +29,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="skill-tree"
         options={{
-          title: 'Skill Tree',
+          title: 'Go Ağacı',
           tabBarIcon: ({ color, size }) => <Ionicons name="git-branch" color={color} size={size} />,
         }}
       />

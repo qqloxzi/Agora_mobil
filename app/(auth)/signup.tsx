@@ -12,6 +12,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { supabase } from '../../src/lib/supabase';
+import { shadowStyle } from '../../src/lib/shadowStyle';
 
 export default function SignupScreen() {
   const insets = useSafeAreaInsets();
@@ -50,13 +51,7 @@ export default function SignupScreen() {
         showsVerticalScrollIndicator={false}>
         <View
           className="w-full max-w-md self-center rounded-2xl bg-white px-6 py-8"
-          style={{
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.06,
-            shadowRadius: 12,
-            elevation: 4,
-          }}>
+          style={shadowStyle({ width: 0, height: 4 }, 12, 0.06, '#000', 4)}>
           <Text className="text-2xl font-bold text-neutral-800 mb-1">Hesap Oluştur</Text>
           <Text className="text-sm text-neutral-500 mb-6">
             E-posta ve şifre ile yeni hesap oluşturun.
