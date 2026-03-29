@@ -1,7 +1,6 @@
 import React from 'react';
 import { View, Text, ScrollView, Image, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { shadowStyle } from '../../src/lib/shadowStyle';
 
 interface TeamMember {
   name: string;
@@ -31,16 +30,16 @@ const TEAM: TeamMember[] = [
   },
 ];
 
-function TeamCard({ member }: { member: TeamMember }) {
+function TeamRow({ member }: { member: TeamMember }) {
   return (
-    <View className="rounded-2xl bg-white border border-gray-200 overflow-hidden mb-6" style={shadowStyle({ width: 0, height: 2 }, 8, 0.06, '#000', 3)}>
-      <View className="w-full aspect-square bg-gray-100">
+    <View className="flex-row items-center w-full mb-8">
+      <View className="w-16 h-16 rounded-full overflow-hidden bg-gray-100 mr-5">
         <Image source={{ uri: member.avatarUri }} className="w-full h-full" resizeMode="cover" />
       </View>
-      <View className="p-4">
-        <Text className="text-lg font-bold text-gray-900">{member.name}</Text>
-        <Text className="text-sm font-semibold text-blue-600 mt-1">{member.level}</Text>
-        <Text className="text-gray-600 text-sm leading-relaxed mt-2">{member.bio}</Text>
+      <View className="flex-1">
+        <Text className="text-xl font-bold text-gray-900">{member.name}</Text>
+        <Text className="text-sm font-medium tracking-wide text-blue-600 mb-2">{member.level}</Text>
+        <Text className="text-gray-600 text-base leading-relaxed">{member.bio}</Text>
       </View>
     </View>
   );
@@ -49,31 +48,39 @@ function TeamCard({ member }: { member: TeamMember }) {
 export default function AboutScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const isWide = width >= 600;
 
   return (
     <ScrollView
-      className="flex-1 bg-gray-50"
+      className="flex-1 bg-white"
       contentContainerStyle={{
-        paddingTop: insets.top + 24,
-        paddingBottom: insets.bottom + 32,
+        paddingTop: insets.top + 32,
+        paddingBottom: insets.bottom + 64,
         paddingHorizontal: 24,
+        alignItems: 'center',
       }}
       showsVerticalScrollIndicator={false}>
-      {/* Header */}
-      <Text className="text-3xl font-extrabold text-gray-900 mb-3">Hakkımızda</Text>
-      <Text className="text-base text-gray-600 leading-relaxed mb-8">
-        Agora Go Akademisi olarak vizyonumuz, her seviyedeki oyuncunun gelişimine katkı sağlamak, go kültürünü yaymak ve oyunun Türkiye'de daha geniş kitlelere ulaşmasını sağlamaktır.
-      </Text>
+      
+      <View className="w-full max-w-2xl">
+        {/* Header */}
+        <Text className="text-4xl font-extrabold tracking-tight text-gray-900 mb-4 text-center">
+          Hakkımızda
+        </Text>
+        <Text className="text-lg text-gray-500 leading-8 mb-16 text-center">
+          Agora Go Akademisi olarak vizyonumuz, her seviyedeki oyuncunun gelişimine katkı sağlamak, go kültürünü yaymak ve oyunun Türkiye'de daha geniş kitlelere ulaşmasını sağlamaktır.
+        </Text>
 
-      {/* Ekip kartları: mobilde dikey, tablet/geniş ekranda yatay */}
-      <View className={isWide ? 'flex-row flex-wrap gap-6' : ''}>
-        {TEAM.map((member) => (
-          <View key={member.name} style={isWide ? { flex: 1, minWidth: 180, maxWidth: 280 } : undefined}>
-            <TeamCard member={member} />
-          </View>
-        ))}
+        <Text className="text-2xl font-bold text-gray-800 mb-8 border-b border-gray-100 pb-2">
+          Ekibimiz
+        </Text>
+
+        {/* Ekip listesi */}
+        <View className="flex-col w-full">
+          {TEAM.map((member) => (
+            <TeamRow key={member.name} member={member} />
+          ))}
+        </View>
       </View>
+
     </ScrollView>
   );
 }

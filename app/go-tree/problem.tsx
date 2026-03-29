@@ -1,43 +1,86 @@
 /**
- * GameManager.jsx akışına uyumlu: Kategoriye göre problem listesi, sonraki/önceki, bitir.
- * problemSet (problems.ts) kullanılır.
+ * GameManager.jsx akışına uyumlu: Kategoriye göre problem listesi. (Artık SGF modunda)
  */
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
+import { View, Text, Pressable, StyleSheet, Platform, Modal, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../src/context/AuthContext';
 import { GoBoardView } from '../../src/components/GoBoardView';
-import { getProblemsForCategory } from '../../src/data/problems';
 import { markTopicCompleted } from '../../src/lib/goTreeProgress';
+import { parseSgfToProblem } from '../../src/lib/sgfParser';
 import type { Problem } from '../../src/types/tsumego';
-
-function hasNoSolution(problem: Problem): boolean {
-  const s = problem.solution;
-  if (Array.isArray(s)) return s.length === 0;
-  if (s && typeof s === 'object' && 'children' in s)
-    return !(s as { children: unknown[] }).children?.length;
-  return true;
-}
+import { Asset } from 'expo-asset';
+import { SGF_ASSETS } from '../../src/data/sgfAssets';
+import { GO_TREE_LEVELS } from '../../src/data/goTreeData';
 
 export default function GoTreeProblemScreen() {
   const { topicId } = useLocalSearchParams<{ topicId: string }>();
   const router = useRouter();
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
 
-  const problems = (topicId ? getProblemsForCategory(topicId) : []) as Problem[];
-  const [currentIndex, setCurrentIndex] = useState(0);
+  const [activeProblem, setActiveProblem] = useState<Problem | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState('');
+  
   const [isNextActive, setIsNextActive] = useState(false);
   const [completedIds, setCompletedIds] = useState<string[]>([]);
   const [statusMessage, setStatusMessage] = useState('');
   const [resetKey, setResetKey] = useState(0);
+  const [showCompletionModal, setShowCompletionModal] = useState(false);
 
-  const activeProblem = problems[currentIndex] ?? null;
-  const progressPercent = problems.length > 0 ? ((currentIndex + 1) / problems.length) * 100 : 0;
+  const deriveProblemTitle = useCallback((id: string) => {
+    for (const group of GO_TREE_LEVELS) {
+      const level = group.levels.find((l) => l.id === id);
+      if (level) return `${group.title} - ${level.label}`;
+    }
+    return id;
+  }, []);
 
+  // Fetch SGF dynamically
   useEffect(() => {
-    if (activeProblem && hasNoSolution(activeProblem)) setIsNextActive(true);
-  }, [activeProblem]);
+    if (!topicId) return;
+    setLoading(true);
+    
+    const loadLessonAsset = async () => {
+      try {
+        const sgfFilename = topicId
+          .toLowerCase()
+          .replace(/[ıİ]/g, 'i')
+          .replace(/[şŞ]/g, 's')
+          .replace(/[ğĞ]/g, 'g')
+          .replace(/[üÜ]/g, 'u')
+          .replace(/[öÖ]/g, 'o')
+          .replace(/[çÇ]/g, 'c')
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/(^-|-$)/g, '');
+
+        const assetModule = SGF_ASSETS[sgfFilename];
+        if (!assetModule) {
+          throw new Error('SGF asset not registered in sgfAssets.ts: ' + sgfFilename);
+        }
+
+        const [asset] = await Asset.loadAsync(assetModule);
+        if (!asset) throw new Error('Expo asset resolution failed');
+        
+        const resp = await fetch(asset.localUri || asset.uri);
+        if (!resp.ok) throw new Error('Network response or local file read failed');
+        
+        const sgfStr = await resp.text();
+        const parsed = parseSgfToProblem(sgfStr, topicId);
+        setActiveProblem({ ...parsed, title: deriveProblemTitle(topicId) });
+        setIsNextActive(false);
+        setLoading(false);
+      } catch (err) {
+        console.error('SGF Loading Error:', err);
+        setErrorMsg('Bu ders henüz eklenmedi: ' + topicId);
+        setLoading(false);
+      }
+    };
+    
+    loadLessonAsset();
+  }, [topicId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -63,28 +106,21 @@ export default function GoTreeProblemScreen() {
   );
 
   const handleNextProblem = useCallback(async () => {
-    if (currentIndex < problems.length - 1) {
-      setCurrentIndex((i) => i + 1);
-      setIsNextActive(false);
-      setStatusMessage('');
-      setResetKey((k) => k + 1);
-    } else {
-      if (!topicId) return;
-      const { completed } = await markTopicCompleted(topicId, user?.id ?? null, completedIds);
-      setCompletedIds(completed);
-      setStatusMessage('Tebrikler! Konu tamamlandı.');
-      setTimeout(() => router.back(), 1200);
-    }
-  }, [currentIndex, problems.length, topicId, user?.id, completedIds, router]);
+    if (!topicId) return;
+    const { completed } = await markTopicCompleted(topicId, user?.id ?? null, completedIds);
+    setCompletedIds(completed);
+    setShowCompletionModal(true);
+  }, [topicId, user?.id, completedIds]);
 
-  const handlePrev = useCallback(() => {
-    if (currentIndex > 0) {
-      setCurrentIndex((i) => i - 1);
-      setIsNextActive(true);
-      setStatusMessage('');
-      setResetKey((k) => k + 1);
-    }
-  }, [currentIndex]);
+  const handleCompletionNextTopic = useCallback(() => {
+    setShowCompletionModal(false);
+    router.replace('/(tabs)/skill-tree');
+  }, [router]);
+
+  const handleCompletionMainMenu = useCallback(() => {
+    setShowCompletionModal(false);
+    router.replace('/(tabs)');
+  }, [router]);
 
   const handleRestart = useCallback(() => {
     setResetKey((k) => k + 1);
@@ -102,7 +138,16 @@ export default function GoTreeProblemScreen() {
     );
   }
 
-  if (problems.length === 0) {
+  if (loading) {
+    return (
+      <View style={styles.centered}>
+        <ActivityIndicator size="large" color={PROGRESS_GREEN} />
+        <Text style={{ color: '#fff', marginTop: 12 }}>Ders yükleniyor...</Text>
+      </View>
+    );
+  }
+
+  if (errorMsg || !activeProblem) {
     return (
       <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
         <View style={styles.containerInner}>
@@ -111,7 +156,7 @@ export default function GoTreeProblemScreen() {
           </Pressable>
           <View style={styles.emptyBox}>
             <Text style={styles.emptyStateText}>
-              Bu konu için henüz tsumego eklenmedi.
+              {errorMsg || 'Problem bulunamadı.'}
             </Text>
             <Text style={styles.emptyStateSubtext}>{topicId}</Text>
           </View>
@@ -121,20 +166,22 @@ export default function GoTreeProblemScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.screenWrap} edges={['top', 'left', 'right', 'bottom']}>
+    <SafeAreaView
+      style={[styles.screenWrap, { paddingBottom: insets.bottom + 8 }]}
+      edges={['top', 'left', 'right']}>
       <View style={styles.screenInner}>
         {/* 1. Üst bilgi çubuğu (Header) */}
         <View style={styles.headerSection}>
           <View style={styles.header}>
             <Text style={styles.title} numberOfLines={1}>
-              {topicId} ({currentIndex + 1} / {problems.length})
+              {topicId} (Ders)
             </Text>
             <Pressable onPress={() => router.back()} style={styles.exitBtn}>
               <Text style={styles.exitBtnText}>× Çıkış</Text>
             </Pressable>
           </View>
           <View style={styles.progressWrap}>
-            <View style={[styles.progressFill, { width: `${progressPercent}%` }]} />
+            <View style={[styles.progressFill, { width: `${isNextActive ? 100 : 50}%` }]} />
           </View>
           {activeProblem?.description ? (
             <View style={styles.infoPanel}>
@@ -158,14 +205,6 @@ export default function GoTreeProblemScreen() {
 
         {/* 3. Alt kontrol butonları */}
         <View style={styles.controls}>
-          <Pressable
-            onPress={handlePrev}
-            disabled={currentIndex === 0}
-            style={[styles.controlBtnGeri, currentIndex === 0 && styles.controlBtnDisabled]}>
-            <Text style={[styles.controlBtnGeriText, currentIndex === 0 && styles.controlBtnTextDisabled]}>
-              ← Geri
-            </Text>
-          </Pressable>
           <Pressable onPress={handleRestart} style={styles.controlBtnRestart}>
             <Text style={styles.controlBtnRestartText}>↻</Text>
           </Pressable>
@@ -174,30 +213,57 @@ export default function GoTreeProblemScreen() {
             disabled={!isNextActive}
             style={[styles.controlBtnNext, !isNextActive && styles.controlBtnDisabled]}>
             <Text style={[styles.controlBtnNextText, !isNextActive && styles.controlBtnTextDisabled]}>
-              {currentIndex >= problems.length - 1 ? 'Bitir' : 'Sonraki →'}
+              {'Bitir →'}
             </Text>
           </Pressable>
         </View>
       </View>
+
+      <Modal
+        visible={showCompletionModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowCompletionModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Tebrikler!</Text>
+            <Text style={styles.modalMessage}>Dersi başarıyla tamamladınız.</Text>
+            <View style={styles.modalButtons}>
+              <Pressable
+                onPress={handleCompletionNextTopic}
+                style={styles.modalBtnNext}
+                accessibilityRole="button">
+                <Text style={styles.modalBtnNextText}>Haritaya Dön</Text>
+              </Pressable>
+              <Pressable
+                onPress={handleCompletionMainMenu}
+                style={styles.modalBtnMenu}
+                accessibilityRole="button">
+                <Text style={styles.modalBtnMenuText}>Ana Menüye Dön</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
 
-const BG_DARK = '#1C263A';
-const PANEL_DARK = '#10162A';
-const PROGRESS_GREEN = '#00C897';
-const PROGRESS_TRACK = '#0d1220';
+const BG_LIGHT = '#FFFFFF';
+const PANEL_LIGHT = '#F3F4F6';
+const PROGRESS_GREEN = '#059669';
+const PROGRESS_TRACK = '#E5E7EB';
 
 const styles = StyleSheet.create({
   centered: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: BG_DARK,
+    backgroundColor: BG_LIGHT,
   },
   container: {
     flex: 1,
-    backgroundColor: BG_DARK,
+    backgroundColor: BG_LIGHT,
   },
   containerInner: {
     flex: 1,
@@ -205,13 +271,14 @@ const styles = StyleSheet.create({
   },
   screenWrap: {
     flex: 1,
-    backgroundColor: BG_DARK,
+    backgroundColor: BG_LIGHT,
   },
   screenInner: {
     flex: 1,
     paddingHorizontal: 20,
     flexDirection: 'column',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
+    gap: 10,
   },
   headerSection: {
     flexShrink: 1,
@@ -225,8 +292,8 @@ const styles = StyleSheet.create({
   title: {
     flex: 1,
     fontSize: 17,
-    fontWeight: '600',
-    color: '#fff',
+    fontWeight: '700',
+    color: '#111827',
     marginRight: 12,
   },
   exitBtn: {
@@ -253,14 +320,14 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 2,
     borderStyle: 'dashed',
-    borderColor: 'rgba(255,255,255,0.2)',
-    backgroundColor: PANEL_DARK,
+    borderColor: '#D1D5DB',
+    backgroundColor: PANEL_LIGHT,
     paddingVertical: 48,
   },
   backBtn: {
     marginTop: 16,
     borderRadius: 8,
-    backgroundColor: PANEL_DARK,
+    backgroundColor: PANEL_LIGHT,
     paddingHorizontal: 16,
     paddingVertical: 8,
   },
@@ -277,15 +344,18 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   infoPanel: {
-    backgroundColor: PANEL_DARK,
+    backgroundColor: PANEL_LIGHT,
     borderRadius: 12,
     padding: 14,
     marginBottom: 4,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
   infoPanelText: {
-    color: '#fff',
-    fontSize: 14,
-    lineHeight: 20,
+    color: '#1F2937',
+    fontSize: 15,
+    lineHeight: 22,
+    fontWeight: '500',
   },
   boardSection: {
     flex: 1,
@@ -302,17 +372,6 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 8,
     flexShrink: 0,
-  },
-  controlBtnGeri: {
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 9999,
-    backgroundColor: '#2a3142',
-  },
-  controlBtnGeriText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#fff',
   },
   controlBtnDisabled: {
     opacity: 0.5,
@@ -334,7 +393,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 20,
     borderRadius: 9999,
-    backgroundColor: '#2a3142',
+    backgroundColor: '#111827',
   },
   controlBtnTextDisabled: {
     color: 'rgba(255,255,255,0.6)',
@@ -345,19 +404,76 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   emptyStateText: {
-    color: 'rgba(255,255,255,0.9)',
+    color: '#374151',
     fontSize: 16,
     textAlign: 'center',
     paddingHorizontal: 24,
+    fontWeight: '500',
   },
   emptyStateSubtext: {
     marginTop: 8,
     fontSize: 14,
-    color: 'rgba(255,255,255,0.5)',
+    color: '#6B7280',
   },
   emptyStateLink: {
     color: '#60a5fa',
     fontWeight: '600',
     fontSize: 16,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalContent: {
+    width: '100%',
+    maxWidth: 320,
+    backgroundColor: BG_LIGHT,
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#111827',
+    marginBottom: 8,
+  },
+  modalMessage: {
+    fontSize: 16,
+    color: '#4B5563',
+    marginBottom: 24,
+    textAlign: 'center',
+  },
+  modalButtons: {
+    width: '100%',
+    gap: 12,
+  },
+  modalBtnNext: {
+    backgroundColor: PROGRESS_GREEN,
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  modalBtnNextText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  modalBtnMenu: {
+    backgroundColor: 'transparent',
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+  },
+  modalBtnMenuText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#4B5563',
   },
 });

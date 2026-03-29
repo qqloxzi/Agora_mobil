@@ -8,6 +8,7 @@ import {
   ScrollView,
   Platform,
   KeyboardAvoidingView,
+  Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as WebBrowser from 'expo-web-browser';
@@ -15,7 +16,6 @@ import * as AuthSession from 'expo-auth-session';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../src/lib/supabase';
-import { shadowStyle } from '../../src/lib/shadowStyle';
 import { useAuth } from '../../src/context/AuthContext';
 
 export default function LoginScreen() {
@@ -69,8 +69,8 @@ export default function LoginScreen() {
 
   if (authLoading) {
     return (
-      <View className="flex-1 items-center justify-center bg-gray-100">
-        <ActivityIndicator color="#2D3748" size="large" />
+      <View className="flex-1 items-center justify-center bg-white">
+        <ActivityIndicator color="#3b82f6" size="large" />
       </View>
     );
   }
@@ -78,87 +78,89 @@ export default function LoginScreen() {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      className="flex-1 bg-gray-100">
+      className="flex-1 bg-white">
       <ScrollView
         contentContainerStyle={{
           flexGrow: 1,
           justifyContent: 'center',
-          paddingHorizontal: 20,
+          paddingHorizontal: 28,
           paddingTop: insets.top + 24,
           paddingBottom: insets.bottom + 24,
         }}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}>
-        {/* Konteyner: beyaz, rounded-3xl, shadow-xl */}
-        <View
-          className="w-full max-w-md self-center rounded-3xl bg-white px-6 py-8"
-          style={shadowStyle({ width: 0, height: 10 }, 20, 0.12, '#000', 12)}>
-          <Text className="text-2xl font-bold text-[#1e3a5f] mb-1">Agora'ya Hoşgeldiniz</Text>
-          <Text className="text-sm text-gray-500 mb-6">
-            İlerlemenizi kaydetmek için giriş yapabilirsiniz.
-          </Text>
 
-          {/* Google: beyaz, ince gri çerçeve */}
+        {/* Logo Section */}
+        <View className="w-full items-center mb-12">
+          <Image 
+            source={require('../../public/background.png')} 
+            style={{ width: 140, height: 140 }} 
+            resizeMode="contain" 
+          />
+        </View>
+
+        <TextInput
+          className="w-full rounded-2xl border border-gray-200 bg-gray-50/50 px-5 py-4 text-gray-800 mb-4 font-medium text-[16px]"
+          placeholder="E-posta"
+          placeholderTextColor="#9ca3af"
+          autoCapitalize="none"
+          keyboardType="email-address"
+          value={email}
+          onChangeText={setEmail}
+        />
+        
+        <TextInput
+          className="w-full rounded-2xl border border-gray-200 bg-gray-50/50 px-5 py-4 text-gray-800 mb-6 font-medium text-[16px]"
+          placeholder="Şifre"
+          placeholderTextColor="#9ca3af"
+          secureTextEntry
+          value={password}
+          onChangeText={setPassword}
+        />
+
+        {error ? <Text className="text-sm font-medium text-red-500 mb-4 text-center px-4">{error}</Text> : null}
+
+        <Pressable
+          onPress={onSignInWithPassword}
+          disabled={submitting}
+          className="w-full bg-blue-500 rounded-2xl py-4 items-center mb-8 active:opacity-90">
+          {submitting ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+             <Text className="text-white font-bold text-lg">Giriş Yap</Text>
+          )}
+        </Pressable>
+
+        <View className="flex-row items-center gap-4 mb-8">
+          <View className="flex-1 h-px bg-gray-200" />
+          <Text className="text-sm font-medium text-gray-400">veya</Text>
+          <View className="flex-1 h-px bg-gray-200" />
+        </View>
+
+        <View className="flex-row items-center gap-4 mb-10 w-full px-4">
           <Pressable
             onPress={onSignInWithGoogle}
             disabled={googleLoading}
-            className="w-full flex-row items-center justify-center gap-3 rounded-lg border border-gray-200 bg-white py-3 active:opacity-90">
+            className="flex-1 flex-row items-center justify-center gap-2 rounded-2xl border border-gray-200 bg-white py-4 active:bg-gray-50">
             {googleLoading ? (
-              <ActivityIndicator color="#2D3748" />
+              <ActivityIndicator color="#3b82f6" />
             ) : (
-              <>
-                <Ionicons name="logo-google" size={20} color="#374151" />
-                <Text className="text-base font-medium text-gray-800">Google ile Devam Et</Text>
-              </>
+              <Ionicons name="logo-google" size={24} color="#ea4335" />
             )}
           </Pressable>
 
-          {/* Ayraç: veya e-posta ile, flex items-center */}
-          <View className="flex-row items-center gap-3 my-5">
-            <View className="flex-1 h-px bg-gray-200" />
-            <Text className="text-sm text-gray-400">veya e-posta ile</Text>
-            <View className="flex-1 h-px bg-gray-200" />
-          </View>
-
-          {/* Inputlar: bg-gray-50, gri çerçeve, p-3, rounded-lg */}
-          <TextInput
-            className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-gray-800 mb-3"
-            placeholder="E-posta Adresi"
-            placeholderTextColor="#9ca3af"
-            autoCapitalize="none"
-            keyboardType="email-address"
-            value={email}
-            onChangeText={setEmail}
-          />
-          <TextInput
-            className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-gray-800 mb-4"
-            placeholder="Şifre"
-            placeholderTextColor="#9ca3af"
-            secureTextEntry
-            value={password}
-            onChangeText={setPassword}
-          />
-
-          {error ? <Text className="text-sm text-red-500 mb-3">{error}</Text> : null}
-
-          {/* Giriş: tam genişlik, bg-[#2D3748], beyaz, rounded-lg */}
           <Pressable
-            onPress={onSignInWithPassword}
-            disabled={submitting}
-            className="w-full rounded-lg py-3.5 items-center active:opacity-90"
-            style={{ backgroundColor: '#2D3748' }}>
-            {submitting ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text className="text-base font-semibold text-white">Giriş Yap</Text>
-            )}
-          </Pressable>
-
-          {/* Alt link: mavi Hesap Oluştur */}
-          <Pressable onPress={() => router.push('/(auth)/signup')} className="mt-4 py-2">
-            <Text className="text-center text-sm font-medium text-blue-500">Hesap Oluştur</Text>
+             className="flex-1 flex-row items-center justify-center gap-2 rounded-2xl border border-gray-200 bg-white py-4 active:bg-gray-50">
+              <Ionicons name="logo-apple" size={24} color="#000" />
           </Pressable>
         </View>
+
+        <Pressable onPress={() => router.push('/(auth)/signup')} className="py-2 active:opacity-70">
+          <Text className="text-center text-[15px] font-medium text-gray-500">
+            Hesabınız yok mu? <Text className="text-blue-500 font-bold">Kayıt Ol</Text>
+          </Text>
+        </Pressable>
+
       </ScrollView>
     </KeyboardAvoidingView>
   );

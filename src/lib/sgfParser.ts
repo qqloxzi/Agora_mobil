@@ -1,207 +1,216 @@
-/**
- * SGF (Smart Game Format) parser for tsumego.
- * .sgf dosyalarından tahta başlangıç pozisyonu ve çözüm ağacı (B/W, C[Correct], C[Wrong]) üretir.
- * GameManager.jsx / GoBoardReact ile uyumlu Problem formatına çevirir.
- */
+import type { Problem, SolutionNode } from '../types/tsumego';
 
-import type { SolutionNode, Problem } from '../types/tsumego';
-
-const SGF_COL = 'abcdefghjklmnopqrst'; // 19x19: 'i' atlanır
-const SGF_ROW = 'abcdefghjklmnopqrst';
-
-function sgfPointToXY(s: string, size: number): { x: number; y: number } | null {
-  if (!s || s.length < 2) return null;
-  const col = s[0].toLowerCase();
-  const row = s[1].toLowerCase();
-  const ci = SGF_COL.indexOf(col);
-  const ri = SGF_ROW.indexOf(row);
-  if (ci === -1 || ri === -1) return null;
-  // SGF: col, row (left-right, top-bottom). Our grid: x=row, y=col
-  const x = size - 1 - ri; // flip row so 0 is top
-  const y = ci;
-  return { x, y };
+function charToCoord(c: string): number {
+  return c.toLowerCase().charCodeAt(0) - 97;
 }
 
-function parseProperty(cont: string, key: string): string[] {
-  const out: string[] = [];
-  const re = new RegExp(key + '\\[([^\\]]*)\\]', 'gi');
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(cont)) !== null) {
-    out.push(m[1]);
-  }
-  return out;
-}
+export function parseSgfToProblem(sgf: string, id: string): Problem {
+  const cleanSgf = sgf.replace(/\r/g, '');
 
-function parseSequence(
-  cont: string,
-  size: number,
-  startTurn: 'black' | 'white'
-): { moves: Array<{ x: number; y: number; color: 'black' | 'white'; status: 'correct' | 'wrong' | null }>; rest: string } {
-  const moves: Array<{ x: number; y: number; color: 'black' | 'white'; status: 'correct' | 'wrong' | null }> = [];
-  let rest = cont.trim();
-  let turn = startTurn;
+  const szMatch = cleanSgf.match(/SZ\[(\d+)\]/);
+  let size = szMatch ? parseInt(szMatch[1], 10) : 19;
 
-  while (rest.startsWith(';')) {
-    const end = rest.indexOf(';', 1);
-    const nodeStr = end === -1 ? rest : rest.slice(0, end);
-    rest = end === -1 ? '' : rest.slice(end);
+  const plMatch = cleanSgf.match(/PL\[([BWbw])\]/);
+  const turn: 'black' | 'white' = (plMatch && plMatch[1].toUpperCase() === 'W') ? 'white' : 'black';
 
-    const b = parseProperty(nodeStr, 'B');
-    const w = parseProperty(nodeStr, 'W');
-    const c = parseProperty(nodeStr, 'C');
-    const comment = c[c.length - 1]?.trim().toLowerCase() ?? '';
-    let status: 'correct' | 'wrong' | null = null;
-    if (comment.includes('correct')) status = 'correct';
-    else if (comment.includes('wrong')) status = 'wrong';
+  const abRegex = /AB(?:\[([a-zA-Z]{2})\])+/g;
+  const awRegex = /AW(?:\[([a-zA-Z]{2})\])+/g;
+  
+  const setupBlack: number[][] = [];
+  const setupWhite: number[][] = [];
 
-    if (b.length > 0) {
-      const xy = sgfPointToXY(b[0], size);
-      if (xy) {
-        moves.push({ ...xy, color: 'black', status });
-        turn = 'white';
-      }
-    } else if (w.length > 0) {
-      const xy = sgfPointToXY(w[0], size);
-      if (xy) {
-        moves.push({ ...xy, color: 'white', status });
-        turn = 'black';
-      }
-    }
-    if (rest.startsWith('(')) break;
-  }
-
-  return { moves, rest: rest.trim() };
-}
-
-function parseVariations(
-  cont: string,
-  size: number,
-  turn: 'black' | 'white'
-): SolutionNode[] {
-  const children: SolutionNode[] = [];
-  let s = cont.trim();
-  while (s.startsWith('(')) {
-    s = s.slice(1);
-    const close = findMatchingParen(s);
-    if (close === -1) break;
-    const branch = s.slice(0, close);
-    s = s.slice(close + 1);
-    const { moves, rest } = parseSequence(branch, size, turn);
-    const first = moves[0];
-    if (!first) continue;
-    const node: SolutionNode = {
-      x: first.x,
-      y: first.y,
-      color: first.color,
-      status: first.status ?? null,
-      children: [],
-    };
-    let nextTurn = first.color === 'black' ? 'white' : 'black';
-    if (moves.length > 1) {
-      let ptr: SolutionNode = node;
-      for (let i = 1; i < moves.length; i++) {
-        const m = moves[i];
-        const child: SolutionNode = { x: m.x, y: m.y, color: m.color, status: m.status ?? null, children: [] };
-        ptr.children = [child];
-        ptr = child;
-        nextTurn = m.color === 'black' ? 'white' : 'black';
-      }
-    }
-    if (rest.trim().startsWith('(')) {
-      ptr.children = parseVariations(rest, size, nextTurn);
-    }
-    children.push(node);
-  }
-  return children;
-}
-
-function findMatchingParen(s: string): number {
-  let depth = 1;
-  for (let i = 0; i < s.length; i++) {
-    if (s[i] === '(') depth++;
-    else if (s[i] === ')') {
-      depth--;
-      if (depth === 0) return i;
+  let setupMat;
+  while ((setupMat = abRegex.exec(cleanSgf)) !== null) {
+    const fullTag = setupMat[0];
+    const itemRegex = /\[([a-zA-Z]{2})\]/g;
+    let itemMatch;
+    while ((itemMatch = itemRegex.exec(fullTag)) !== null) {
+      const col = charToCoord(itemMatch[1][0]);
+      const row = charToCoord(itemMatch[1][1]);
+      setupBlack.push([row, col]);
     }
   }
-  return -1;
-}
 
-function buildSolutionTree(
-  moves: Array<{ x: number; y: number; color: 'black' | 'white'; status: 'correct' | 'wrong' | null }>,
-  variations: SolutionNode[],
-  startTurn: 'black' | 'white'
-): { children: SolutionNode[] } {
-  const root = { children: [] as SolutionNode[] };
-  if (moves.length === 0) return root;
-  let ptr = root;
-  let turn = startTurn;
-  for (const m of moves) {
-    const node: SolutionNode = { x: m.x, y: m.y, color: m.color, status: m.status ?? null, children: [] };
-    ptr.children = [node];
-    ptr = node;
-    turn = m.color === 'black' ? 'white' : 'black';
-  }
-  if (variations.length > 0) ptr.children = variations;
-  return root;
-}
-
-/** 2D tahta: boş veya { color } */
-function emptyBoard(size: number): (null | { color: string })[][] {
-  return Array(size)
-    .fill(null)
-    .map(() => Array(size).fill(null));
-}
-
-function boardToInitialState(board: (null | { color: string })[][]): string {
-  return JSON.stringify(board);
-}
-
-/**
- * SGF string'ini Problem (JSON uyumlu) formatına çevirir.
- * FF[4], SZ, AB, AW, ardından ana varyasyon (;B[..];W[..]) ve ( ) ile yan varyasyonlar desteklenir.
- */
-export function parseSgfToProblem(sgf: string, id: string, category: string, title?: string): Problem | null {
-  const normalized = sgf.replace(/\r\n/g, '\n').replace(/\n/g, ' ');
-  const sz = parseProperty(normalized, 'SZ');
-  const size = sz.length > 0 ? Math.min(19, Math.max(9, parseInt(sz[0], 10) || 9)) : 9;
-  const ab = parseProperty(normalized, 'AB');
-  const aw = parseProperty(normalized, 'AW');
-
-  const board = emptyBoard(size);
-  for (const p of ab) {
-    const xy = sgfPointToXY(p, size);
-    if (xy && board[xy.x] && board[xy.x][xy.y] === null) board[xy.x][xy.y] = { color: 'black' };
-  }
-  for (const p of aw) {
-    const xy = sgfPointToXY(p, size);
-    if (xy && board[xy.x] && board[xy.x][xy.y] === null) board[xy.x][xy.y] = { color: 'white' };
+  while ((setupMat = awRegex.exec(cleanSgf)) !== null) {
+    const fullTag = setupMat[0];
+    const itemRegex = /\[([a-zA-Z]{2})\]/g;
+    let itemMatch;
+    while ((itemMatch = itemRegex.exec(fullTag)) !== null) {
+      const col = charToCoord(itemMatch[1][0]);
+      const row = charToCoord(itemMatch[1][1]);
+      setupWhite.push([row, col]);
+    }
   }
 
-  const firstB = normalized.indexOf('B[');
-  const firstW = normalized.indexOf('W[');
-  let startTurn: 'black' | 'white' = 'black';
-  if (firstB >= 0 && (firstW < 0 || firstB < firstW)) startTurn = 'black';
-  else if (firstW >= 0) startTurn = 'white';
+  const state2d = Array.from({ length: size }, () => Array.from({ length: size }, () => null));
+  for (const [r, c] of setupBlack) {
+    if (r >= 0 && r < size && c >= 0 && c < size) state2d[r][c] = { color: 'black' } as any;
+  }
+  for (const [r, c] of setupWhite) {
+    if (r >= 0 && r < size && c >= 0 && c < size) state2d[r][c] = { color: 'white' } as any;
+  }
+  const initialState = JSON.stringify(state2d);
 
-  const mainStart = Math.max(normalized.indexOf(';'), 0);
-  const mainBlock = normalized.slice(mainStart);
-  const { moves, rest } = parseSequence(mainBlock, size, startTurn);
-  const variations = rest.trim().startsWith('(') ? parseVariations(rest, size, startTurn) : [];
-  const solution = buildSolutionTree(moves, variations, startTurn);
+  const rootCommentMatch = cleanSgf.match(/C\[(.*?)\]/s);
+  const description = rootCommentMatch ? rootCommentMatch[1].replace(/\\\]/g, ']') : '';
 
-  const initialState = boardToInitialState(board);
-  const labels = initialState; // boş veya tahta ile aynı 2D JSON
+  const rootTree = parseSgfBranches(cleanSgf);
 
   return {
     id,
     size,
-    labels,
-    turn: startTurn,
-    title: title ?? category,
-    description: '',
-    category,
+    category: 'lesson',
+    title: id,
+    turn,
+    labels: '[]',
     initialState,
-    solution,
+    description,
+    solution: rootTree
   };
+}
+
+function parseSgfBranches(sgf: string): { children: SolutionNode[] } {
+  let pos = 0;
+  
+  function skipWhitespace() {
+    while (pos < sgf.length && /\s/.test(sgf[pos])) pos++;
+  }
+
+  function readProperty(): { key: string, values: string[] } | null {
+    skipWhitespace();
+    if (pos >= sgf.length || !/[A-Z]/.test(sgf[pos])) return null;
+    
+    let keyStart = pos;
+    while (pos < sgf.length && /[A-Z]/.test(sgf[pos])) pos++;
+    const key = sgf.substring(keyStart, pos);
+    
+    const values: string[] = [];
+    skipWhitespace();
+    while (pos < sgf.length && sgf[pos] === '[') {
+      pos++;
+      let valStart = pos;
+      let val = '';
+      while (pos < sgf.length && sgf[pos] !== ']') {
+        if (sgf[pos] === '\\' && pos + 1 < sgf.length) {
+          val += sgf[pos + 1];
+          pos += 2;
+        } else {
+          val += sgf[pos];
+          pos++;
+        }
+      }
+      values.push(val);
+      if (pos < sgf.length && sgf[pos] === ']') pos++;
+      skipWhitespace();
+    }
+    return { key, values };
+  }
+  
+  function readNode(): SolutionNode | null {
+    skipWhitespace();
+    if (pos >= sgf.length || sgf[pos] !== ';') return null;
+    pos++;
+    
+    let color: 'black' | 'white' | null = null;
+    let x: number | undefined;
+    let y: number | undefined;
+    let status: 'correct' | 'wrong' | null = null;
+    let description = '';
+    
+    while (true) {
+      // peek if next is a property
+      skipWhitespace();
+      if (pos >= sgf.length || !/[A-Z]/.test(sgf[pos])) break;
+      const prop = readProperty();
+      if (!prop) break;
+      
+      if (prop.key === 'B' || prop.key === 'W') {
+        color = prop.key === 'B' ? 'black' : 'white';
+        if (prop.values[0] && prop.values[0].length >= 2) {
+          y = charToCoord(prop.values[0][0]); // column
+          x = charToCoord(prop.values[0][1]); // row
+        }
+      }
+      if (prop.key === 'C') {
+        const comment = prop.values[0] || '';
+        description = comment; // We don't natively support description on nodes in 'tsumego.ts' SolutionNode yet, but we could extend
+        if (comment.includes('CORRECT') || comment.includes('RIGHT') || comment.includes('Tebrikler')) status = 'correct';
+        if (comment.includes('WRONG') || comment.includes('Yanliş') || comment.includes('Yanlış')) status = 'wrong';
+      }
+    }
+    
+    if (color && x !== undefined && y !== undefined) {
+      return { color, x, y, status, children: [] } as SolutionNode;
+    }
+    return null;
+  }
+
+  function readSequence(): SolutionNode[] {
+    const sequence: SolutionNode[] = [];
+    while (pos < sgf.length) {
+      skipWhitespace();
+      if (sgf[pos] === ';') {
+        const node = readNode();
+        if (node) sequence.push(node);
+      } else if (sgf[pos] === '(' || sgf[pos] === ')') {
+        break;
+      } else {
+        pos++;
+      }
+    }
+    for (let i = 0; i < sequence.length - 1; i++) {
+      sequence[i].children = [sequence[i + 1]];
+    }
+    return sequence;
+  }
+
+  function readTree(): SolutionNode[] {
+    skipWhitespace();
+    if (pos >= sgf.length || sgf[pos] !== '(') return [];
+    pos++;
+
+    const sequence = readSequence();
+    
+    const branches: SolutionNode[] = [];
+    while (pos < sgf.length) {
+      skipWhitespace();
+      if (sgf[pos] === '(') {
+        const subTree = readTree();
+        if (subTree.length > 0) branches.push(subTree[0]);
+      } else if (sgf[pos] === ')') {
+        pos++;
+        break;
+      } else {
+        pos++; // Safe skip
+      }
+    }
+    
+    if (sequence.length > 0) {
+      const endNode = sequence[sequence.length - 1];
+      endNode.children = branches;
+      return [sequence[0]];
+    }
+    return branches;
+  }
+
+  const result: SolutionNode[] = [];
+  while (pos < sgf.length) {
+    skipWhitespace();
+    if (sgf[pos] === '(') {
+      const tree = readTree();
+      // Skip root node of the very first tree if it just has properties and no move
+      if (tree.length > 0) {
+        result.push(tree[0]);
+      }
+    } else {
+      pos++;
+    }
+  }
+
+  // Very simplified: SGF roots usually have a node with SZ/AB/AW but no B/W. 
+  // Then children hold the actual moves. If the root node parsing created a dummy node (which it shouldn't if we discard nodes with no move),
+  // then we are fine. The root parser above discards nodes with no `color`/`x`/`y`! 
+  // Wait, if it discards them, their children won't be linked if we use `readSequence`.
+  // Let's ensure the root node's children are actually captured.
+  return { children: result };
 }

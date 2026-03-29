@@ -32,4 +32,4 @@ export interface CourseListItem {
 }
 
 /** Sadece 3 ligi listelemek için kullanılan slug'lar */
-export const LIG_SLUGS = ['temel-taslar', 'gelisim', 'aydınlanma'] as const;
+export const LIG_SLUGS = ['temel-taslar', 'gelisim', 'aydinlanma'] as const;
