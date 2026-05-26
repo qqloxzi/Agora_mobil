@@ -10,7 +10,7 @@ export default function TabLayout() {
         tabBarActiveTintColor: '#1d4ed8',
         tabBarStyle: { backgroundColor: '#ffffff', borderTopColor: '#e5e7eb' },
         tabBarInactiveTintColor: '#6b7280',
-        tabBarLabelStyle: { fontSize: 11, fontWeight: '500' },
+        tabBarLabelStyle: { fontSize: 10, fontWeight: '500' },
       }}>
       <Tabs.Screen
         name="index"
@@ -27,10 +27,17 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="skill-tree"
+        name="atolyeler"
         options={{
-          title: 'Go Ağacı',
-          tabBarIcon: ({ color, size }) => <Ionicons name="git-branch" color={color} size={size} />,
+          title: 'Atölyeler',
+          tabBarIcon: ({ color, size }) => <Ionicons name="easel" color={color} size={size} />,
+        }}
+      />
+      <Tabs.Screen
+        name="forum"
+        options={{
+          title: 'Forum',
+          tabBarIcon: ({ color, size }) => <Ionicons name="chatbubbles" color={color} size={size} />,
         }}
       />
       <Tabs.Screen
