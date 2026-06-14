@@ -15,6 +15,21 @@ import { useAuth } from '../../src/context/AuthContext';
 /* OAuth callback'i uygulamada tamamlamak için gerekli */
 WebBrowser.maybeCompleteAuthSession();
 
+async function completeSupabaseSessionFromUrl(url: string) {
+  const parsed = new URL(url);
+  const code = parsed.searchParams.get('code');
+  if (code) return supabase.auth.exchangeCodeForSession(code);
+
+  const hashParams = new URLSearchParams(parsed.hash.replace(/^#/, ''));
+  const accessToken = hashParams.get('access_token') ?? parsed.searchParams.get('access_token');
+  const refreshToken = hashParams.get('refresh_token') ?? parsed.searchParams.get('refresh_token');
+  if (accessToken && refreshToken) {
+    return supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+  }
+
+  return { data: null, error: null };
+}
+
 export default function LoginScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -29,7 +44,7 @@ export default function LoginScreen() {
   useEffect(() => {
     const handleUrl = async ({ url }: { url: string }) => {
       if (!url.includes('access_token') && !url.includes('code=')) return;
-      await supabase.auth.getSessionFromUrl(url, true);
+      await completeSupabaseSessionFromUrl(url);
     };
     const sub = Linking.addEventListener('url', handleUrl);
     Linking.getInitialURL().then((url) => { if (url) handleUrl({ url }); });
@@ -75,7 +90,7 @@ export default function LoginScreen() {
         const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
 
         if (result.type === 'success' && result.url) {
-          const { error: sessionError } = await supabase.auth.getSessionFromUrl(result.url, true);
+          const { error: sessionError } = await completeSupabaseSessionFromUrl(result.url);
           if (sessionError) setError(sessionError.message);
         } else if (result.type === 'cancel') {
           setError('Giriş iptal edildi.');

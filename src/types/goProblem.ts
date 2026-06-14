@@ -29,6 +29,8 @@ export type GoProblem = {
   category: string;
   title: string;
   description: string;
+  /** Supabase `initial_description`: preferred intro shown before lesson body/description. */
+  initialDescription?: string;
   size: number;
   turn: 'black' | 'white';
   /** JSON: `(BoardLabelCell | null)[][]` — SGF LB/TR/CR/SQ/MA */

@@ -8,10 +8,29 @@
  * Geometri: goBoardLayout.js (aynı kaynak)
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, Pressable, useWindowDimensions } from 'react-native';
-import Svg, { Rect, Line, Circle, G, Text as SvgText } from 'react-native-svg';
+import {
+  View,
+  Text,
+  Pressable,
+  StyleSheet,
+  useWindowDimensions,
+  type GestureResponderEvent,
+} from 'react-native';
+import Svg, {
+  Rect,
+  Line,
+  Circle,
+  G,
+  Text as SvgText,
+  Defs,
+  LinearGradient,
+  RadialGradient,
+  Stop,
+  Ellipse,
+  Polygon,
+} from 'react-native-svg';
 import { computeBoardLayout, intersectionXY } from '../lib/goBoardLayout';
-import type { GoProblem } from '../types/goProblem';
+import type { BoardLabelCell, GoProblem } from '../types/goProblem';
 
 /* ─── Tipler ───────────────────────────────────────────────── */
 type Color = 'black' | 'white';
@@ -33,7 +52,11 @@ export interface GoBoardProps {
   onTurnChange?: (turn: Color) => void;
   /** Aktif node değişince çağrılır — comment, color ve koordinat bilgisi */
   onNodeChange?: (info: { x: number; y: number; comment: string | null; color: string | null } | null) => void;
+  /** true → kontrol çubuğundaki sıra göstergesi ("Siyah oynuyor") gizlenir */
+  hideTurnIndicator?: boolean;
 }
+
+const OPPONENT_RESPONSE_DELAY_MS = 550;
 
 /* ─── Star Points ──────────────────────────────────────────── */
 const STAR_POINTS: Record<number, [number, number][]> = {
@@ -66,6 +89,27 @@ function gridToStones(grid: BoardGrid): { x: number; y: number; color: Color }[]
     }
   }
   return result;
+}
+
+function parseBoardLabels(raw: string | undefined, size: number): (BoardLabelCell | null)[][] {
+  const empty = Array.from({ length: size }, () => Array<BoardLabelCell | null>(size).fill(null));
+  if (!raw) return empty;
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return empty;
+    return empty.map((col, x) =>
+      col.map((_, y) => {
+        const cell = parsed[x]?.[y];
+        return cell && typeof cell === 'object' ? (cell as BoardLabelCell) : null;
+      })
+    );
+  } catch {
+    return empty;
+  }
+}
+
+function cleanNodeComment(comment: unknown): string {
+  return typeof comment === 'string' ? comment.trim() : '';
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -220,6 +264,7 @@ export default function GoBoard({
   readOnly = false,
   onTurnChange,
   onNodeChange,
+  hideTurnIndicator = false,
 }: GoBoardProps) {
   const { width: screenW } = useWindowDimensions();
   const W = boardSizePx ?? Math.min(screenW - 32, 380);
@@ -252,6 +297,51 @@ export default function GoBoard({
   const [currentNode, setCurrentNode] = useState<any>(initState.currentNode);
   const [statusMsg, setStatusMsg] = useState<string>('');
   const solvedRef = useRef(false);
+  const [hintPos, setHintPos] = useState<{ x: number; y: number } | null>(null);
+  const [pausePhase, setPausePhase] = useState<'beforeOpponent' | 'afterOpponent' | null>(null);
+
+  /* Rakip hamle otomatik oynatma: { node, gridAfterUserMove } */
+  const [pendingOpponent, setPendingOpponent] = useState<{
+    node: any; gridAfterUser: BoardGrid; paused?: boolean;
+  } | null>(null);
+
+  const playOpponentResponse = useCallback(() => {
+    setPendingOpponent((pending) => pending ? { ...pending, paused: false } : pending);
+    setPausePhase(null);
+  }, []);
+
+  useEffect(() => {
+    if (!pendingOpponent) return;
+    if (pendingOpponent.paused) return;
+    const { node: oppNode, gridAfterUser } = pendingOpponent;
+    const timer = setTimeout(() => {
+      /* Rakibin taşını yerleştir ve esir al */
+      const newGrid: BoardGrid = gridAfterUser.map(r => r.map(c => c ? { ...c } : null));
+      if (oppNode.x !== undefined && oppNode.y !== undefined) {
+        newGrid[oppNode.x]![oppNode.y] = { color: oppNode.color };
+        const opp: Color = oppNode.color === 'black' ? 'white' : 'black';
+        for (const [nx, ny] of [
+          [oppNode.x + 1, oppNode.y], [oppNode.x - 1, oppNode.y],
+          [oppNode.x, oppNode.y + 1], [oppNode.x, oppNode.y - 1],
+        ] as [number, number][]) {
+          if (isOnBoard(nx, ny, size) && newGrid[nx]?.[ny]?.color === opp &&
+              getLiberties(nx, ny, opp, newGrid, size) === 0) {
+            removeGroup(nx, ny, opp, newGrid, size);
+          }
+        }
+      }
+      setGrid(newGrid);
+      setLastMove(oppNode.x !== undefined ? { x: oppNode.x, y: oppNode.y } : null);
+      setTurn(oppNode.color === 'black' ? 'white' : 'black');
+      setCurrentNode(oppNode);
+      setBoardHistory(h => [...h, JSON.stringify(gridAfterUser)]);
+      setPendingOpponent(null);
+      if ((problem?.lessonPlayback ?? 'stepAfter') === 'stepAfter' && oppNode.comment) {
+        setPausePhase('afterOpponent');
+      }
+    }, OPPONENT_RESPONSE_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [pendingOpponent, size, problem?.lessonPlayback]);
 
   /* currentNode değişince comment + koordinat'i dışarı aktar */
   useEffect(() => {
@@ -285,10 +375,11 @@ export default function GoBoard({
   }, [size, padding, cellSize]);
 
   /* Dokunma: hamle oyna */
-  const handlePress = useCallback((evt: any) => {
+  const handleBoardTap = useCallback((touchX: number, touchY: number) => {
     if (readOnly) return;
-    const { locationX, locationY } = evt.nativeEvent;
-    const pos = hitTest(locationX, locationY);
+    if (pausePhase === 'beforeOpponent') return;
+    if (!Number.isFinite(touchX) || !Number.isFinite(touchY)) return;
+    const pos = hitTest(touchX, touchY);
     if (!pos) return;
 
     const snapshot = JSON.stringify(grid);
@@ -305,6 +396,8 @@ export default function GoBoard({
     }
 
     setStatusMsg('');
+    setHintPos(null);
+    setPausePhase(null);
     setBoardHistory(h => [...h, snapshot]);
     setGrid(result.newGrid!);
     setLastMove(pos);
@@ -318,18 +411,38 @@ export default function GoBoard({
       const matched = children.find((c: any) => c.x === pos.x && c.y === pos.y && c.color === turn);
       if (matched) {
         setCurrentNode(matched);  // ← useEffect onNodeChange'i tetikler
-        if (matched.status === 'correct' || (children.length === 1 && matched.children?.length === 0)) {
+        const isLeaf = !matched.children || matched.children.length === 0;
+        if (matched.status === 'correct' || (children.length === 1 && isLeaf)) {
           solvedRef.current = true;
           onSolve?.();
           setStatusMsg('✅ Doğru!');
         } else if (matched.status === 'wrong') {
           setStatusMsg('❌ Yanlış hamle.');
         }
+        // Rakibin SGF cevabını otomatik oynat (isLeaf değilse)
+        if (!isLeaf && matched.children.length >= 1) {
+          const playback = problem?.lessonPlayback ?? 'stepAfter';
+          if (playback === 'stepBefore') {
+            setStatusMsg(cleanNodeComment(matched.comment) || 'Devam ederek rakibin cevabını gör.');
+            setPausePhase('beforeOpponent');
+            setPendingOpponent({ node: matched.children[0], gridAfterUser: result.newGrid!, paused: true });
+          } else {
+            setPendingOpponent({ node: matched.children[0], gridAfterUser: result.newGrid! });
+          }
+        }
       } else if (children.length > 0) {
         setStatusMsg('❌ Yanlış hamle.');
       }
     }
-  }, [readOnly, grid, turn, size, boardHistory, hitTest, problem, onSolve, onTurnChange]);
+  }, [readOnly, pausePhase, grid, turn, size, boardHistory, hitTest, problem, onSolve, onTurnChange]);
+
+  const handleResponderRelease = useCallback(
+    (evt: GestureResponderEvent) => {
+      const { locationX, locationY } = evt.nativeEvent;
+      handleBoardTap(locationX, locationY);
+    },
+    [handleBoardTap]
+  );
 
   /* Geri al */
   const undo = useCallback(() => {
@@ -340,6 +453,9 @@ export default function GoBoard({
     setTurn(t => (t === 'black' ? 'white' : 'black'));
     setLastMove(null);
     setStatusMsg('');
+    setHintPos(null);
+    setPausePhase(null);
+    setPendingOpponent(null);
     solvedRef.current = false;
   }, [boardHistory]);
 
@@ -351,11 +467,25 @@ export default function GoBoard({
     setLastMove(initState.lastMove);
     setCurrentNode(initState.currentNode);
     setStatusMsg('');
+    setHintPos(null);
+    setPausePhase(null);
+    setPendingOpponent(null);
     solvedRef.current = false;
   }, [initState]);
 
   /* ── SVG ── */
   const stars = STAR_POINTS[size] ?? [];
+  const labels = useMemo(() => parseBoardLabels(problem?.labels, size), [problem?.labels, size]);
+
+  const showHint = useCallback(() => {
+    const next = (currentNode?.children ?? []).find((node: any) =>
+      Number.isInteger(node?.x) && Number.isInteger(node?.y)
+    );
+    if (next) {
+      setHintPos({ x: next.x, y: next.y });
+      setStatusMsg('İpucu gösteriliyor.');
+    }
+  }, [currentNode]);
 
   return (
     <View>
@@ -371,10 +501,28 @@ export default function GoBoard({
       )}
 
       {/* Tahta */}
-      <Pressable onPress={handlePress}>
+      <View style={[styles.boardFrame, { width: W, height: W }]}>
         <Svg width={W} height={W} style={{ borderRadius: 4 }}>
-          {/* Ahşap arka plan */}
-          <Rect x={0} y={0} width={W} height={W} fill="#E3BA71" rx={4} />
+          <Defs>
+            <LinearGradient id="wood" x1="0" y1="0" x2="0" y2="1">
+              <Stop offset="0%" stopColor="#F5B731" />
+              <Stop offset="42%" stopColor="#EDA826" />
+              <Stop offset="100%" stopColor="#D4920F" />
+            </LinearGradient>
+            <RadialGradient id="blackStone" cx="35%" cy="30%" r="65%">
+              <Stop offset="0%" stopColor="#555" />
+              <Stop offset="45%" stopColor="#222" />
+              <Stop offset="100%" stopColor="#050505" />
+            </RadialGradient>
+            <RadialGradient id="whiteStone" cx="35%" cy="28%" r="70%">
+              <Stop offset="0%" stopColor="#fff" />
+              <Stop offset="48%" stopColor="#f0f0f0" />
+              <Stop offset="100%" stopColor="#b9b9b9" />
+            </RadialGradient>
+          </Defs>
+
+          {/* Gravity board look: warm SVG wood, no axis labels. */}
+          <Rect x={0} y={0} width={W} height={W} fill="url(#wood)" rx={8} />
 
           {/* Grid yatay + dikey çizgiler */}
           {Array.from({ length: size }).map((_, i) => {
@@ -384,50 +532,32 @@ export default function GoBoard({
             const { x: rx, y: ry } = intersectionXY(padding, cellSize, size - 1, i);
             return (
               <G key={i}>
-                <Line x1={sx} y1={sy} x2={ex} y2={ey} stroke="rgba(0,0,0,0.6)" strokeWidth={0.8} />
-                <Line x1={lx} y1={ly} x2={rx} y2={ry} stroke="rgba(0,0,0,0.6)" strokeWidth={0.8} />
+                <Line x1={sx} y1={sy} x2={ex} y2={ey} stroke="rgba(0,0,0,0.7)" strokeWidth={0.7} />
+                <Line x1={lx} y1={ly} x2={rx} y2={ry} stroke="rgba(0,0,0,0.7)" strokeWidth={0.7} />
               </G>
             );
           })}
-
-          {/* Dış çerçeve (kalın) */}
-          {(() => {
-            const { x: x0, y: y0 } = intersectionXY(padding, cellSize, 0, 0);
-            const { x: x1, y: y1 } = intersectionXY(padding, cellSize, size-1, size-1);
-            return <Rect x={x0} y={y0} width={x1-x0} height={y1-y0} fill="none" stroke="rgba(0,0,0,0.7)" strokeWidth={1.6} />;
-          })()}
 
           {/* Hoshi (star points) */}
           {stars.map(([ix, iy]) => {
             const { x, y } = intersectionXY(padding, cellSize, ix, iy);
-            return <Circle key={`h-${ix}-${iy}`} cx={x} cy={y} r={Math.max(1.6, cellSize * 0.07)} fill="rgba(0,0,0,0.75)" />;
+            return <Circle key={`h-${ix}-${iy}`} cx={x} cy={y} r={Math.max(2, Math.min(3.2, cellSize * 0.075))} fill="rgba(0,0,0,0.75)" />;
           })}
 
-          {/* Koordinat etiketleri */}
-          {Array.from({ length: size }).map((_, i) => {
-            const col = String.fromCharCode(65 + (i >= 8 ? i + 1 : i)); // I yok
-            const { x } = intersectionXY(padding, cellSize, i, 0);
-            const { y: yBot } = intersectionXY(padding, cellSize, 0, size-1);
-            const fz = Math.max(7, cellSize * 0.28);
+          {/* Hint marker */}
+          {hintPos ? (() => {
+            const pt = intersectionXY(padding, cellSize, hintPos.x, hintPos.y);
             return (
-              <G key={`cl-${i}`}>
-                <SvgText x={x} y={padding*0.55} textAnchor="middle" fontSize={fz} fill="rgba(0,0,0,0.6)" fontWeight="700">{col}</SvgText>
-                <SvgText x={x} y={yBot+padding*0.72} textAnchor="middle" fontSize={fz} fill="rgba(0,0,0,0.6)" fontWeight="700">{col}</SvgText>
-              </G>
+              <Circle
+                cx={pt.x}
+                cy={pt.y}
+                r={cellSize * 0.32}
+                fill="rgba(16,185,129,0.18)"
+                stroke="#10b981"
+                strokeWidth={2}
+              />
             );
-          })}
-          {Array.from({ length: size }).map((_, i) => {
-            const row = String(size - i);
-            const { y } = intersectionXY(padding, cellSize, 0, i);
-            const { x: xR } = intersectionXY(padding, cellSize, size-1, 0);
-            const fz = Math.max(7, cellSize * 0.28);
-            return (
-              <G key={`rl-${i}`}>
-                <SvgText x={padding*0.45} y={y+cellSize*0.1} textAnchor="middle" fontSize={fz} fill="rgba(0,0,0,0.6)" fontWeight="700">{row}</SvgText>
-                <SvgText x={xR+padding*0.58} y={y+cellSize*0.1} textAnchor="middle" fontSize={fz} fill="rgba(0,0,0,0.6)" fontWeight="700">{row}</SvgText>
-              </G>
-            );
-          })}
+          })() : null}
 
           {/* Taşlar */}
           {stones.map((s) => {
@@ -437,12 +567,19 @@ export default function GoBoard({
             return (
               <G key={`${s.x}-${s.y}`}>
                 {/* Gölge */}
-                <Circle cx={x+1} cy={y+2} r={r} fill="rgba(0,0,0,0.22)" />
+                <Circle cx={x+1} cy={y+2} r={r} fill="rgba(0,0,0,0.28)" />
                 {/* Taş */}
                 <Circle cx={x} cy={y} r={r}
-                  fill={s.color === 'black' ? '#1a1a1a' : '#f5f0e8'}
-                  stroke={s.color === 'black' ? '#000' : '#888'}
-                  strokeWidth={0.6}
+                  fill={s.color === 'black' ? 'url(#blackStone)' : 'url(#whiteStone)'}
+                  stroke={s.color === 'black' ? 'rgba(0,0,0,0.6)' : 'rgba(80,80,80,0.3)'}
+                  strokeWidth={0.7}
+                />
+                <Ellipse
+                  cx={x - r * 0.28}
+                  cy={y - r * 0.28}
+                  rx={s.color === 'black' ? r * 0.18 : r * 0.26}
+                  ry={s.color === 'black' ? r * 0.11 : r * 0.16}
+                  fill={s.color === 'black' ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.75)'}
                 />
                 {/* Son hamle işareti */}
                 {isLast && (
@@ -453,36 +590,107 @@ export default function GoBoard({
               </G>
             );
           })}
+
+          {/* SGF labels/marks from Gravity board. */}
+          {labels.map((col, x) => col.map((cell, y) => {
+            if (!cell) return null;
+            const pt = intersectionXY(padding, cellSize, x, y);
+            const stone = grid[x]?.[y];
+            const ink = stone?.color === 'black' ? '#fff' : '#111';
+            if (cell.kind === 'letter') {
+              return (
+                <SvgText
+                  key={`lb-${x}-${y}`}
+                  x={pt.x}
+                  y={pt.y + cellSize * 0.02}
+                  textAnchor="middle"
+                  alignmentBaseline="middle"
+                  fontSize={cellSize * 0.58}
+                  fontWeight="800"
+                  fill={ink}
+                >
+                  {cell.text}
+                </SvgText>
+              );
+            }
+            if (cell.kind === 'circle') {
+              return <Circle key={`lb-${x}-${y}`} cx={pt.x} cy={pt.y} r={cellSize * 0.22} fill="none" stroke={ink} strokeWidth={2} />;
+            }
+            if (cell.kind === 'square') {
+              const s = cellSize * 0.24;
+              return <Rect key={`lb-${x}-${y}`} x={pt.x - s} y={pt.y - s} width={s * 2} height={s * 2} fill="none" stroke={ink} strokeWidth={2} />;
+            }
+            if (cell.kind === 'triangle') {
+              const s = cellSize * 0.28;
+              const points = `${pt.x},${pt.y - s} ${pt.x - s * 0.87},${pt.y + s * 0.5} ${pt.x + s * 0.87},${pt.y + s * 0.5}`;
+              return <Polygon key={`lb-${x}-${y}`} points={points} fill="none" stroke={ink} strokeWidth={2} />;
+            }
+            const s = cellSize * 0.22;
+            return (
+              <G key={`lb-${x}-${y}`}>
+                <Line x1={pt.x - s} y1={pt.y - s} x2={pt.x + s} y2={pt.y + s} stroke={ink} strokeWidth={2} />
+                <Line x1={pt.x + s} y1={pt.y - s} x2={pt.x - s} y2={pt.y + s} stroke={ink} strokeWidth={2} />
+              </G>
+            );
+          }))}
         </Svg>
-      </Pressable>
+        {!readOnly && (
+          <View
+            style={StyleSheet.absoluteFill}
+            onStartShouldSetResponder={() => true}
+            onResponderRelease={handleResponderRelease}
+          />
+        )}
+      </View>
 
       {/* Kontrol çubuğu */}
       {!readOnly && (
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10, paddingHorizontal: 4 }}>
-          {/* Sıra göstergesi */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <View style={{
-              width: 18, height: 18, borderRadius: 9,
-              backgroundColor: turn === 'black' ? '#1a1a1a' : '#f5f0e8',
-              borderWidth: 1, borderColor: '#888',
-            }} />
-            <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151' }}>
-              {turn === 'black' ? 'Siyah' : 'Beyaz'} oynuyor
-            </Text>
-          </View>
-          {/* Butonlar */}
-          <View style={{ flexDirection: 'row', gap: 8 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: hideTurnIndicator ? 'center' : 'space-between', marginTop: 8, paddingHorizontal: 4, gap: 10 }}>
+          {/* Sıra göstergesi — ders modunda gizlenir */}
+          {!hideTurnIndicator && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <View style={{
+                width: 16, height: 16, borderRadius: 8,
+                backgroundColor: turn === 'black' ? '#1a1a1a' : '#f5f0e8',
+                borderWidth: 1, borderColor: '#888',
+              }} />
+              <Text style={{ fontSize: 12, fontWeight: '600', color: '#374151' }}>
+                {turn === 'black' ? 'Siyah' : 'Beyaz'} oynuyor
+              </Text>
+            </View>
+          )}
+          {/* Gravity-style lesson board controls */}
+          <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
             <Pressable onPress={undo}
-              style={{ paddingHorizontal: 12, paddingVertical: 6, backgroundColor: '#f3f4f6', borderRadius: 20, borderWidth: 1, borderColor: '#e5e7eb' }}>
-              <Text style={{ fontSize: 12, fontWeight: '600', color: '#6b7280' }}>↩ Geri Al</Text>
+              style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: '#f1f5f9', alignItems: 'center', justifyContent: 'center' }}>
+              <Text style={{ fontSize: 15, color: '#64748b' }}>↩</Text>
             </Pressable>
             <Pressable onPress={reset}
-              style={{ paddingHorizontal: 12, paddingVertical: 6, backgroundColor: '#f3f4f6', borderRadius: 20, borderWidth: 1, borderColor: '#e5e7eb' }}>
-              <Text style={{ fontSize: 12, fontWeight: '600', color: '#6b7280' }}>↺ Sıfırla</Text>
+              style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: '#f1f5f9', alignItems: 'center', justifyContent: 'center' }}>
+              <Text style={{ fontSize: 15, color: '#64748b' }}>↺</Text>
             </Pressable>
+            <Pressable onPress={showHint}
+              style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: '#f1f5f9', alignItems: 'center', justifyContent: 'center' }}>
+              <Text style={{ fontSize: 15, color: '#64748b' }}>?</Text>
+            </Pressable>
+            {pausePhase === 'beforeOpponent' && (
+              <Pressable onPress={playOpponentResponse}
+                style={{ paddingHorizontal: 12, height: 34, borderRadius: 17, backgroundColor: '#f59e0b', alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ fontSize: 12, fontWeight: '800', color: '#fff' }}>▶ Devam</Text>
+              </Pressable>
+            )}
           </View>
         </View>
       )}
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  boardFrame: {
+    position: 'relative',
+    borderRadius: 4,
+    backgroundColor: '#D4920F',
+    boxShadow: '0px 8px 18px rgba(0,0,0,0.28)',
+  } as any,
+});

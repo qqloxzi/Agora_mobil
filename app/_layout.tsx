@@ -18,8 +18,14 @@ export default function RootLayout() {
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="(auth)" />
           <Stack.Screen name="course-detail/[slug]" options={{ presentation: 'card' }} />
+          <Stack.Screen name="atolyeler-detay/[slug]" options={{ presentation: 'card' }} />
           <Stack.Screen name="atolyeler/[slug]" options={{ presentation: 'card' }} />
-          <Stack.Screen name="go-tree/problem" options={{ presentation: 'card' }} />
+          <Stack.Screen name="fikstur" options={{ presentation: 'card' }} />
+          <Stack.Screen name="contact" options={{ presentation: 'card' }} />
+          <Stack.Screen name="blog/index" options={{ presentation: 'card' }} />
+          <Stack.Screen name="blog/[slug]" options={{ presentation: 'card' }} />
+          <Stack.Screen name="instructor/index" options={{ presentation: 'card' }} />
+          <Stack.Screen name="instructor/[id]" options={{ presentation: 'card' }} />
           <Stack.Screen name="onboarding" options={{ presentation: 'modal' }} />
         </Stack>
       </OnboardingProvider>

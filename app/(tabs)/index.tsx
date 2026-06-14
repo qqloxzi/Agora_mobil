@@ -20,17 +20,15 @@ export default function HomeScreen() {
         paddingHorizontal: 16,
       }}
       showsVerticalScrollIndicator={false}>
-      
       <HeroSection />
       <FeaturesSection />
-      
+
       <View className="px-2">
         <PhilosophySection />
       </View>
-      
+
       <ProtocolSection />
       <FAQ />
-
     </ScrollView>
   );
 }

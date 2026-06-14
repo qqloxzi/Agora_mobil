@@ -1,35 +1,38 @@
 /**
  * AtolyelerKurs — Agora Mobil
  *
- * Agora_gravity AtolyelerKurs.jsx + ContentView + LessonActiveInfoCard +
- * GameManagerLessonEmbed'in tam React Native portu.
+ * Split-screen layout:
+ *  - Üst yarı: tahta (ekran yüksekliğinin ~%45'i)
+ *  - Alt yarı: sıra / hamle yorumu / ilerleme çubuğu + CTA
  *
- * Özellikler:
- *  - SidebarMenu (ders listesi modal)
- *  - LessonActiveInfoCard (sıra, hamle notu, ilerleme, "Devam" butonu)
- *  - GoBoard (fast-forward, Ko kuralı, onNodeChange, opponentResponse)
- *  - Sonraki ders / Kurs tamamlandı CTA
+ * Kullanıcı board ile etkileşime girerken açıklamayı görmek için
+ * scroll yapmak zorunda kalmaz.
  */
+import { Ionicons } from '@expo/vector-icons';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  View, Text, Pressable, ScrollView, ActivityIndicator,
-  Modal, useWindowDimensions,
+  ActivityIndicator,
+  Modal,
+  Pressable, ScrollView,
+  Text,
+  useWindowDimensions,
+  View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { supabase } from '../../src/lib/supabase';
+import GoBoard from '../../src/components/GoBoard';
 import {
   fetchCurriculum, findCourseBySlug, flattenLessonsForCourse,
   getNextLesson, type Course, type Lesson,
 } from '../../src/lib/education/fetchCurriculum';
 import {
+  fetchRemoteCompletedLessonIds,
   loadLocalCompletedIds, markLessonCompleted,
-  fetchRemoteCompletedLessonIds, saveLocalCompletedIds,
+  saveLocalCompletedIds,
 } from '../../src/lib/education/progressStorage';
-import GoBoard from '../../src/components/GoBoard';
+import { supabase } from '../../src/lib/supabase';
 
-/* ─── Yardımcılar ─────────────────────────────────────────────── */
+/* ─── Yardımcılar ────────────────────────────────────────────── */
 function formatCoord(x: number, y: number, size: number): string {
   const col = String.fromCharCode(65 + (x >= 8 ? x + 1 : x));
   return `${col}${size - y}`;
@@ -40,8 +43,18 @@ function cleanText(text: string | null | undefined): string {
   return text.replace(/https:\/\/online-go\.com\/review\/\d+/g, '').trim();
 }
 
+function getLessonIntroText(lesson: Lesson): string {
+  const initialDescription = cleanText(lesson.problem?.initialDescription);
+  if (initialDescription) return initialDescription;
+  const body = cleanText(lesson.body);
+  if (body) return body;
+  const problemDescription = cleanText(lesson.problem?.description);
+  if (problemDescription && !problemDescription.startsWith('SGF:')) return problemDescription;
+  return '';
+}
+
 /* ═══════════════════════════════════════════════════════════════
-   SidebarMenu — ders listesi
+   SidebarMenu — ders listesi (modal içinde)
 ═══════════════════════════════════════════════════════════════ */
 function SidebarMenu({
   course, selectedId, completedIds, onSelect,
@@ -97,151 +110,33 @@ function SidebarMenu({
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   LessonActiveInfoCard — sidebar bilgi kartı
-   (Agora_gravity LessonActiveInfoCard.jsx'in tam portu)
-═══════════════════════════════════════════════════════════════ */
-function LessonActiveInfoCard({
-  lessonTitle, problemDescription, boardSize, initialTurn,
-  activeNodeInfo, opponentStepControls, progressIndex, progressTotal,
-}: {
-  lessonTitle: string;
-  problemDescription?: string | null;
-  boardSize: number;
-  initialTurn: 'black' | 'white';
-  activeNodeInfo: { x: number; y: number; color: string; comment: string | null } | null;
-  opponentStepControls?: { continue: () => void; phase: 'beforeOpponent' | 'afterOpponent' } | null;
-  progressIndex: number;
-  progressTotal: number;
-}) {
-  const pct = progressTotal > 0 ? (progressIndex / progressTotal) * 100 : 0;
-  const turnLabel = initialTurn === 'white' ? 'Beyaz oynar' : 'Siyah oynar';
-  const cleanedDesc = cleanText(problemDescription);
-
-  return (
-    <View style={{
-      backgroundColor: '#fff', borderRadius: 16,
-      borderWidth: 1, borderColor: '#e0e7ff',
-      padding: 14, shadowColor: '#000', shadowOpacity: 0.04,
-      shadowOffset: { width: 0, height: 1 }, shadowRadius: 4, elevation: 2,
-    }}>
-      {/* Ders adı */}
-      <Text style={{ fontSize: 10, color: '#9ca3af', fontWeight: '600', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 2 }}>
-        Ders
-      </Text>
-      <Text style={{ fontSize: 14, fontWeight: '700', color: '#111827', marginBottom: 10 }} numberOfLines={2}>
-        {lessonTitle}
-      </Text>
-
-      {/* Sıra + açıklama */}
-      <View style={{
-        backgroundColor: '#f8fafc', borderRadius: 12,
-        borderWidth: 1, borderColor: '#e2e8f0', padding: 12, marginBottom: 10,
-      }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: cleanedDesc ? 6 : 0 }}>
-          <View style={{
-            width: 14, height: 14, borderRadius: 7,
-            backgroundColor: initialTurn === 'black' ? '#1a1a1a' : '#f5f0e8',
-            borderWidth: 1, borderColor: '#94a3b8',
-          }} />
-          <Text style={{ fontSize: 13, fontWeight: '600', color: '#1e293b' }}>{turnLabel}</Text>
-        </View>
-        {cleanedDesc ? (
-          <Text style={{ fontSize: 12, color: '#475569', lineHeight: 18 }}>{cleanedDesc}</Text>
-        ) : null}
-      </View>
-
-      {/* Aktif hamle notu */}
-      <View style={{
-        backgroundColor: activeNodeInfo ? '#f0f4ff' : '#f8fafc',
-        borderRadius: 12, borderWidth: 1,
-        borderColor: activeNodeInfo ? '#c7d2fe' : '#e2e8f0',
-        padding: 12, marginBottom: 10,
-      }}>
-        {activeNodeInfo ? (
-          <>
-            <Text style={{ fontSize: 14, fontWeight: '700', color: '#1e293b', marginBottom: 4 }}>
-              {activeNodeInfo.color === 'white' ? 'Beyaz' : 'Siyah'} · {formatCoord(activeNodeInfo.x, activeNodeInfo.y, boardSize)}
-            </Text>
-            <Text style={{ fontSize: 13, color: '#334155', lineHeight: 20 }}>
-              {cleanText(activeNodeInfo.comment) || 'Bu hamle için kayıtlı açıklama yok.'}
-            </Text>
-          </>
-        ) : (
-          <Text style={{ fontSize: 12, color: '#64748b', lineHeight: 18 }}>
-            Başlangıç pozisyonu. Hamle yaptıkça notlar burada görünür.
-          </Text>
-        )}
-      </View>
-
-      {/* Devam butonu (rakibin hamlesi) */}
-      {opponentStepControls ? (
-        <View style={{ marginBottom: 10 }}>
-          {opponentStepControls.phase === 'beforeOpponent' && (
-            <Text style={{ fontSize: 11, color: '#64748b', marginBottom: 6 }}>
-              Hamlenizin yorumunu okuyun; rakibin cevabını göstermek için devam edin.
-            </Text>
-          )}
-          <Pressable onPress={opponentStepControls.continue}
-            style={{
-              backgroundColor: '#1d4ed8', borderRadius: 12,
-              paddingVertical: 10, alignItems: 'center',
-            }}>
-            <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>
-              {opponentStepControls.phase === 'beforeOpponent' ? '▶ Rakibin hamlesini göster' : '▶ Devam et'}
-            </Text>
-          </Pressable>
-        </View>
-      ) : null}
-
-      {/* İlerleme çubuğu */}
-      <View>
-        <Text style={{ fontSize: 10, color: '#9ca3af', fontWeight: '600', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>
-          İlerleme
-        </Text>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <View style={{ flex: 1, height: 6, backgroundColor: '#e2e8f0', borderRadius: 3, overflow: 'hidden' }}>
-            <View style={{ width: `${pct}%`, height: '100%', backgroundColor: '#3b82f6', borderRadius: 3 }} />
-          </View>
-          <Text style={{ fontSize: 11, color: '#6b7280', fontWeight: '600' }}>
-            {progressIndex} / {progressTotal}
-          </Text>
-        </View>
-      </View>
-    </View>
-  );
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   LessonContent — tahta + bilgi kartı + CTA
-   (GameManagerLessonEmbed + ContentView birleşimi)
+   LessonContent — split-screen: tahta (üst) + bilgi paneli (alt)
 ═══════════════════════════════════════════════════════════════ */
 function LessonContent({
   lesson, completed, onSolved, onNext, hasNext, isLast,
-  progressIndex, progressTotal,
+  progressIndex, progressTotal, onSolvedStateChange,
 }: {
   lesson: Lesson; completed: boolean;
   onSolved: () => void; onNext: () => void;
   hasNext: boolean; isLast: boolean;
   progressIndex: number; progressTotal: number;
+  onSolvedStateChange?: (solved: boolean) => void;
 }) {
-  const { width } = useWindowDimensions();
-  const boardPx = Math.min(width - 32, 380);
+  const { width, height } = useWindowDimensions();
+  // Board: en fazla ekran yüksekliğinin %45'i veya ekran genişliği - 32
+  const boardPx = Math.min(width - 32, height * 0.45);
 
-  const [solved, setSolved]           = useState(completed);
+  const [solved, setSolved] = useState(completed);
   const [activeNodeInfo, setActiveNodeInfo] = useState<{
     x: number; y: number; color: string; comment: string | null;
   } | null>(null);
-  const [opponentControls, setOpponentControls] = useState<{
-    continue: () => void; phase: 'beforeOpponent' | 'afterOpponent';
-  } | null>(null);
   const solvedOnceRef = useRef(false);
 
-  // Ders değişince sıfırla
   useEffect(() => {
     setSolved(completed);
     setActiveNodeInfo(null);
-    setOpponentControls(null);
     solvedOnceRef.current = false;
+    onSolvedStateChange?.(completed);
   }, [lesson.id, completed]);
 
   const handleSolve = useCallback(() => {
@@ -249,52 +144,35 @@ function LessonContent({
       solvedOnceRef.current = true;
       setSolved(true);
       onSolved();
+      onSolvedStateChange?.(true);
     }
-  }, [onSolved]);
+  }, [onSolved, onSolvedStateChange]);
 
   const handleNodeChange = useCallback((
-    info: { comment: string | null; color: string | null } | null
+    info: { x: number; y: number; comment: string | null; color: string | null } | null
   ) => {
-    // GoBoard'dan gelen info'yu activeNodeInfo formatına çevir
-    // GoBoard ayrıca pos bilgisini de verse daha iyi olur;
-    // şimdilik comment + color yeterli, x/y 0,0 placeholder
     if (!info) { setActiveNodeInfo(null); return; }
-    setActiveNodeInfo((prev) => ({
-      x: prev?.x ?? 0,
-      y: prev?.y ?? 0,
-      color: info.color ?? 'black',
-      comment: info.comment,
-    }));
+    setActiveNodeInfo({ x: info.x, y: info.y, color: info.color ?? 'black', comment: info.comment });
   }, []);
 
   const initialTurn: 'black' | 'white' = lesson.problem?.turn === 'white' ? 'white' : 'black';
   const boardSize = lesson.problem?.size ?? 19;
-  const showNextCta = (solved) && hasNext;
+  const pct = progressTotal > 0 ? (progressIndex / progressTotal) * 100 : 0;
+  const introText = getLessonIntroText(lesson);
 
   return (
-    <ScrollView
-      contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 60 }}
-      showsVerticalScrollIndicator={false}
-    >
-      {/* Ders başlığı */}
-      <View style={{ paddingTop: 16, paddingBottom: 10 }}>
-        <Text style={{ fontSize: 18, fontWeight: '800', color: '#111827' }}>{lesson.title}</Text>
-      </View>
+    <View style={{ flex: 1, backgroundColor: '#f7f3eb' }}>
 
-      {/* Ders metni */}
-      {lesson.body !== '' && (
-        <View style={{
-          backgroundColor: '#eff6ff', borderRadius: 14,
-          borderWidth: 1, borderColor: '#bfdbfe',
-          padding: 14, marginBottom: 12,
-        }}>
-          <Text style={{ fontSize: 13, color: '#1e40af', lineHeight: 20 }}>{lesson.body}</Text>
-        </View>
-      )}
+      {/* ── Üst: tahta ── */}
+      <View style={{ alignItems: 'center', paddingHorizontal: 14, paddingTop: 10 }}>
+        <Text
+          style={{ fontSize: 14, fontWeight: '800', color: '#1f2937', alignSelf: 'flex-start', marginBottom: 6 }}
+          numberOfLines={1}
+        >
+          {lesson.title}
+        </Text>
 
-      {/* GoBoard */}
-      {lesson.problem && (
-        <View style={{ alignItems: 'center', marginBottom: 12 }}>
+        {lesson.problem && (
           <GoBoard
             size={boardSize}
             boardSizePx={boardPx}
@@ -303,79 +181,100 @@ function LessonContent({
             problem={lesson.problem}
             onSolve={handleSolve}
             onNodeChange={handleNodeChange}
+            hideTurnIndicator
           />
-        </View>
-      )}
+        )}
+      </View>
 
-      {/* Araç çubuğu: Geri Al + Yeniden Başlat + Devam */}
-      {/* GoBoard kendi araç çubuğuna sahip; opponentControls için ayrıca buton */}
-      {opponentControls && (
-        <Pressable
-          onPress={opponentControls.continue}
-          style={{
-            flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-            gap: 6, backgroundColor: '#1d4ed8', borderRadius: 14,
-            paddingVertical: 12, marginBottom: 12,
-          }}>
-          <Ionicons name="play" size={16} color="#fff" />
-          <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>
-            {opponentControls.phase === 'beforeOpponent' ? 'Rakibin hamlesini göster' : 'Devam et'}
-          </Text>
-        </Pressable>
-      )}
-
-      {/* LessonActiveInfoCard */}
-      <LessonActiveInfoCard
-        lessonTitle={lesson.title}
-        problemDescription={lesson.problem?.description}
-        boardSize={boardSize}
-        initialTurn={initialTurn}
-        activeNodeInfo={activeNodeInfo}
-        opponentStepControls={opponentControls}
-        progressIndex={progressIndex}
-        progressTotal={progressTotal}
-      />
-
-      {/* Tebrik + Sonraki ders CTA */}
-      {solved && (
+      {/* ── Alt: bilgi paneli — kalan alanı doldurur ── */}
+      <ScrollView
+        style={{ flex: 1, marginTop: 8, borderTopWidth: 1, borderTopColor: '#e8ddcc' }}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 24 }}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Gravity LessonIntroBox equivalent */}
         <View style={{
-          backgroundColor: '#ecfdf5', borderRadius: 16,
-          borderWidth: 1, borderColor: '#6ee7b7',
-          padding: 16, marginTop: 14,
-          flexDirection: 'row', alignItems: 'center', gap: 10,
+          backgroundColor: '#fffaf0', borderRadius: 14,
+          borderWidth: 1, borderColor: '#f1d19b', padding: 13, marginBottom: 8,
         }}>
-          <Ionicons name="checkmark-circle" size={28} color="#10b981" />
-          <View style={{ flex: 1 }}>
-            <Text style={{ fontWeight: '700', color: '#065f46', fontSize: 14 }}>Tebrikler!</Text>
-            <Text style={{ color: '#047857', fontSize: 12, marginTop: 2 }}>Bu dersi tamamladınız.</Text>
+          <Text style={{ fontSize: 10, fontWeight: '900', letterSpacing: 1.2, color: '#b45309', textTransform: 'uppercase', marginBottom: 4 }}>
+            Bu alıştırmada
+          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: introText ? 5 : 0 }}>
+            <View style={{
+              width: 13, height: 13, borderRadius: 7,
+              backgroundColor: initialTurn === 'black' ? '#1a1a1a' : '#f5f0e8',
+              borderWidth: 1, borderColor: '#94a3b8',
+            }} />
+            <Text style={{ fontSize: 13, fontWeight: '600', color: '#1e293b' }}>
+              {initialTurn === 'white' ? 'Beyaz oynar' : 'Siyah oynar'}
+            </Text>
           </View>
+          {introText ? (
+            <Text style={{ fontSize: 12, color: '#475569', lineHeight: 18 }}>{introText}</Text>
+          ) : null}
         </View>
-      )}
 
-      {showNextCta && (
-        <Pressable onPress={onNext}
-          style={{
-            flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-            gap: 8, backgroundColor: '#1d4ed8', borderRadius: 16,
-            paddingVertical: 14, marginTop: 10,
-          }}>
-          <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>Sonraki derse geç</Text>
-          <Ionicons name="arrow-forward" size={18} color="#fff" />
-        </Pressable>
-      )}
-
-      {solved && isLast && (
+        {/* Aktif hamle yorumu — bigger card */}
         <View style={{
-          backgroundColor: '#059669', borderRadius: 16,
-          paddingVertical: 14, marginTop: 10, alignItems: 'center',
+          backgroundColor: activeNodeInfo ? '#f0f4ff' : '#f8fafc',
+          borderRadius: 12, borderWidth: 1,
+          borderColor: activeNodeInfo ? '#c7d2fe' : '#e2e8f0',
+          padding: 14, marginBottom: 8, minHeight: 80,
         }}>
-          <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>🎉 Kurs Tamamlandı!</Text>
-          <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 12, marginTop: 4 }}>
-            Bu müfredattaki son dersiniz. Tebrikler!
+          {activeNodeInfo ? (
+            <>
+              <Text style={{ fontSize: 13, fontWeight: '700', color: '#1e293b', marginBottom: 5 }}>
+                {activeNodeInfo.color === 'white' ? 'Beyaz' : 'Siyah'} · {formatCoord(activeNodeInfo.x, activeNodeInfo.y, boardSize)}
+              </Text>
+              <Text style={{ fontSize: 13, color: '#334155', lineHeight: 20 }}>
+                {cleanText(activeNodeInfo.comment) || 'Bu hamle için kayıtlı açıklama yok.'}
+              </Text>
+            </>
+          ) : (
+            <Text style={{ fontSize: 13, color: '#64748b', lineHeight: 20 }}>
+              Başlangıç pozisyonu. Hamle yaptıkça notlar burada görünür.
+            </Text>
+          )}
+        </View>
+
+        {/* İlerleme çubuğu */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+          <View style={{ flex: 1, height: 5, backgroundColor: '#e2e8f0', borderRadius: 3, overflow: 'hidden' }}>
+            <View style={{ width: `${pct}%` as any, height: '100%', backgroundColor: '#3b82f6', borderRadius: 3 }} />
+          </View>
+          <Text style={{ fontSize: 11, color: '#6b7280', fontWeight: '600' }}>
+            {progressIndex} / {progressTotal}
           </Text>
         </View>
-      )}
-    </ScrollView>
+
+        {/* Tebrik */}
+        {solved && (
+          <View style={{
+            backgroundColor: '#ecfdf5', borderRadius: 14,
+            borderWidth: 1, borderColor: '#6ee7b7',
+            padding: 13, flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8,
+          }}>
+            <Ionicons name="checkmark-circle" size={26} color="#10b981" />
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontWeight: '700', color: '#065f46', fontSize: 14 }}>Tebrikler!</Text>
+              <Text style={{ color: '#047857', fontSize: 12, marginTop: 2 }}>Bu dersi tamamladınız.</Text>
+            </View>
+          </View>
+        )}
+        {/* Sonraki ders butonu header'a taşındı */}
+
+        {/* Kurs tamamlandı */}
+        {solved && isLast && (
+          <View style={{ backgroundColor: '#059669', borderRadius: 14, paddingVertical: 13, alignItems: 'center' }}>
+            <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>🎉 Kurs Tamamlandı!</Text>
+            <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 12, marginTop: 4 }}>
+              Bu müfredattaki son dersiniz. Tebrikler!
+            </Text>
+          </View>
+        )}
+      </ScrollView>
+    </View>
   );
 }
 
@@ -383,16 +282,17 @@ function LessonContent({
    Ana Ekran
 ═══════════════════════════════════════════════════════════════ */
 export default function AtolyelerKursScreen() {
-  const insets  = useSafeAreaInsets();
-  const router  = useRouter();
+  const insets = useSafeAreaInsets();
+  const router = useRouter();
   const { slug } = useLocalSearchParams<{ slug: string }>();
 
-  const [courses, setCourses]               = useState<Course[]>([]);
-  const [loading, setLoading]               = useState(true);
-  const [completedIds, setCompletedIds]     = useState<Set<string>>(new Set());
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [completedIds, setCompletedIds] = useState<Set<string>>(new Set());
   const [selectedLessonId, setSelectedLessonId] = useState<string | null>(null);
-  const [userId, setUserId]                 = useState<string | null>(null);
-  const [sidebarOpen, setSidebarOpen]       = useState(false);
+  const [lessonSolved, setLessonSolved] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const activeCourse = useMemo(
     () => (slug ? findCourseBySlug(courses, slug) : null),
@@ -407,12 +307,12 @@ export default function AtolyelerKursScreen() {
     [flatLessons, selectedLessonId]
   );
   const lessonCompleted = currentLesson ? completedIds.has(currentLesson.id) : false;
-  const nextLesson      = useMemo(
+  const nextLesson = useMemo(
     () => (selectedLessonId ? getNextLesson(flatLessons, selectedLessonId) : null),
     [flatLessons, selectedLessonId]
   );
-  const isLast          = flatLessons.length > 0 && flatLessons[flatLessons.length - 1]?.id === currentLesson?.id;
-  const lessonIndex     = flatLessons.findIndex((l) => l.id === selectedLessonId);
+  const isLast = flatLessons.length > 0 && flatLessons[flatLessons.length - 1]?.id === currentLesson?.id;
+  const lessonIndex = flatLessons.findIndex((l) => l.id === selectedLessonId);
 
   /* Veri yükle */
   useEffect(() => {
@@ -509,7 +409,7 @@ export default function AtolyelerKursScreen() {
 
       {/* ── Üst Bar ── */}
       <View style={{
-        flexDirection: 'row', alignItems: 'center', gap: 10,
+        flexDirection: 'row', alignItems: 'center', gap: 8,
         paddingHorizontal: 16, paddingVertical: 12,
         backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e5e7eb',
       }}>
@@ -527,14 +427,16 @@ export default function AtolyelerKursScreen() {
             </Text>
           )}
         </View>
+        {/* Sonraki ders — sadece çözüldüğünde ve sonraki varsa */}
+        {lessonSolved && Boolean(nextLesson) && (
+          <Pressable onPress={handleNext}
+            style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: '#1d4ed8', alignItems: 'center', justifyContent: 'center' }}>
+            <Ionicons name="arrow-forward" size={17} color="#fff" />
+          </Pressable>
+        )}
         <Pressable onPress={() => setSidebarOpen(true)}
-          style={{
-            flexDirection: 'row', alignItems: 'center', gap: 5,
-            paddingHorizontal: 12, paddingVertical: 8,
-            backgroundColor: '#f3f4f6', borderRadius: 100,
-          }}>
-          <Ionicons name="list" size={16} color="#374151" />
-          <Text style={{ fontSize: 12, fontWeight: '600', color: '#374151' }}>Dersler</Text>
+          style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: '#f3f4f6', alignItems: 'center', justifyContent: 'center' }}>
+          <Ionicons name="list" size={17} color="#374151" />
         </Pressable>
       </View>
 
@@ -550,6 +452,7 @@ export default function AtolyelerKursScreen() {
           isLast={isLast}
           progressIndex={lessonIndex + 1}
           progressTotal={flatLessons.length}
+          onSolvedStateChange={setLessonSolved}
         />
       ) : (
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>

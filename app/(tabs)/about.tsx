@@ -1,86 +1,106 @@
 import React from 'react';
-import { View, Text, ScrollView, Image, useWindowDimensions } from 'react-native';
+import { Image, Pressable, ScrollView, Text, useWindowDimensions, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { instructorsData, type InstructorProfile } from '../../src/data/gravityContent';
 
-interface TeamMember {
-  name: string;
-  level: string;
-  bio: string;
-  avatarUri: string;
-}
+function InstructorCard({ instructor, cardWidth }: { instructor: InstructorProfile; cardWidth: number }) {
+  const router = useRouter();
 
-const TEAM: TeamMember[] = [
-  {
-    name: 'Tuğkan Eren',
-    level: '4 Dan',
-    bio: 'Go alanında 15 yılı aşkın tecrübeye sahiptir ve Türkiye Go Milli Takımı oyuncusudur.',
-    avatarUri: 'https://ui-avatars.com/api/?name=Tu%C4%9Fkan+Eren&size=256&background=1e3a5f&color=fff&bold=true',
-  },
-  {
-    name: 'Oğuz Erdoğan',
-    level: '1 Dan',
-    bio: "4 yıldır go oynuyor. Hem Goizm'de hem de İytego'da başkanlık yapmış ve hâlâ İytego'da haftalık buluşmalarda dersler veriyor.",
-    avatarUri: 'https://ui-avatars.com/api/?name=O%C4%9Fuz+Erdo%C4%9Fan&size=256&background=1e3a5f&color=fff&bold=true',
-  },
-  {
-    name: 'Ali Karakaya',
-    level: '5 Kyu',
-    bio: "2 yıldır go oynuyor. Bu dönemde Goizm'de ve İytego'da aktif rol alıyor.",
-    avatarUri: 'https://ui-avatars.com/api/?name=Ali+Karakaya&size=256&background=1e3a5f&color=fff&bold=true',
-  },
-];
-
-function TeamRow({ member }: { member: TeamMember }) {
   return (
-    <View className="flex-row items-center w-full mb-8">
-      <View className="w-16 h-16 rounded-full overflow-hidden bg-gray-100 mr-5">
-        <Image source={{ uri: member.avatarUri }} className="w-full h-full" resizeMode="cover" />
+    <Pressable
+      onPress={() => router.push(`/instructor/${instructor.id}`)}
+      className="items-center rounded-3xl bg-white p-6 active:opacity-90"
+      style={{
+        width: cardWidth,
+        borderWidth: 1,
+        borderColor: 'rgba(10,37,64,0.05)',
+        boxShadow: '0px 10px 24px rgba(10,37,64,0.08)',
+      } as any}
+      accessibilityRole="button"
+    >
+      <View
+        className="mb-6 overflow-hidden rounded-full bg-blue-50"
+        style={{
+          width: 176,
+          height: 176,
+          borderWidth: 4,
+          borderColor: '#f8fbff',
+        }}
+      >
+        <Image
+          source={instructor.avatar}
+          style={{ width: '100%', height: '100%' }}
+          resizeMode="cover"
+        />
       </View>
-      <View className="flex-1">
-        <Text className="text-xl font-bold text-gray-900">{member.name}</Text>
-        <Text className="text-sm font-medium tracking-wide text-blue-600 mb-2">{member.level}</Text>
-        <Text className="text-gray-600 text-base leading-relaxed">{member.bio}</Text>
+
+      <View className="items-center">
+        <Text className="text-center text-2xl font-extrabold text-gray-900">{instructor.name}</Text>
+        <Text className="mb-4 mt-1 text-base font-extrabold text-blue-600">{instructor.title}</Text>
+        <Text className="mb-5 text-center text-sm leading-6 text-gray-500" numberOfLines={3}>
+          {instructor.about}
+        </Text>
+
+        <View className="w-full flex-row items-center justify-center gap-1 border-t border-blue-50 pt-4">
+          <Text className="text-xs font-bold text-gray-400">Detaylar</Text>
+          <Ionicons name="arrow-forward" size={12} color="#9ca3af" />
+        </View>
       </View>
-    </View>
+    </Pressable>
   );
 }
 
 export default function AboutScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
+  const isWide = width >= 720;
+  const cardWidth = isWide ? Math.min((width - 64) / 2, 320) : width - 40;
 
   return (
     <ScrollView
-      className="flex-1 bg-white"
+      className="flex-1 bg-ice-white"
       contentContainerStyle={{
-        paddingTop: insets.top + 32,
-        paddingBottom: insets.bottom + 64,
-        paddingHorizontal: 24,
-        alignItems: 'center',
+        paddingTop: insets.top + 36,
+        paddingBottom: insets.bottom + 80,
+        paddingHorizontal: 20,
       }}
-      showsVerticalScrollIndicator={false}>
-      
-      <View className="w-full max-w-2xl">
-        {/* Header */}
-        <Text className="text-4xl font-extrabold tracking-tight text-gray-900 mb-4 text-center">
+      showsVerticalScrollIndicator={false}
+    >
+      <View className="mx-auto mb-16 max-w-[720px] items-center">
+        <Text className="mb-6 text-center text-4xl font-extrabold tracking-tight text-primary-blue">
           Hakkımızda
         </Text>
-        <Text className="text-lg text-gray-500 leading-8 mb-16 text-center">
-          Agora Go Akademisi olarak vizyonumuz, her seviyedeki oyuncunun gelişimine katkı sağlamak, go kültürünü yaymak ve oyunun Türkiye'de daha geniş kitlelere ulaşmasını sağlamaktır.
+        <Text className="text-center text-lg leading-8 text-gray-600">
+          Agora Go Akademisi olarak vizyonumuz, her seviyedeki oyuncunun gelişimine katkı
+          sağlamak, go kültürünü yaymak ve oyunun Türkiye&apos;de daha geniş kitlelere
+          ulaşmasını sağlamaktır.
         </Text>
-
-        <Text className="text-2xl font-bold text-gray-800 mb-8 border-b border-gray-100 pb-2">
-          Ekibimiz
-        </Text>
-
-        {/* Ekip listesi */}
-        <View className="flex-col w-full">
-          {TEAM.map((member) => (
-            <TeamRow key={member.name} member={member} />
-          ))}
-        </View>
       </View>
 
+      <View className="mb-10 items-center">
+        <Text className="mb-2 text-sm font-extrabold uppercase tracking-widest text-blue-500">
+          Takımımız
+        </Text>
+        <Text className="text-center text-3xl font-extrabold tracking-tight text-primary-blue">
+          Eğitmenlerimiz
+        </Text>
+      </View>
+
+      <View
+        className="items-center"
+        style={{
+          flexDirection: isWide ? 'row' : 'column',
+          flexWrap: 'wrap',
+          justifyContent: 'center',
+          gap: 24,
+        }}
+      >
+        {instructorsData.map((instructor) => (
+          <InstructorCard key={instructor.id} instructor={instructor} cardWidth={cardWidth} />
+        ))}
+      </View>
     </ScrollView>
   );
 }

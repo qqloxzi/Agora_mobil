@@ -34,13 +34,6 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="forum"
-        options={{
-          title: 'Forum',
-          tabBarIcon: ({ color, size }) => <Ionicons name="chatbubbles" color={color} size={size} />,
-        }}
-      />
-      <Tabs.Screen
         name="about"
         options={{
           title: 'Hakkımızda',
