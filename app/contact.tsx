@@ -37,7 +37,6 @@ export default function ContactScreen() {
         <View className="mt-6 gap-3">
           <InfoRow icon="school" title="Eğitim" text="Seviyene göre kurs ve atölye seçimi." />
           <InfoRow icon="trophy" title="Ligler" text="Fikstür ve lig katılım süreçleri." />
-          <InfoRow icon="chatbubbles" title="Topluluk" text="Yorumlar, sorular ve geri bildirimler." />
         </View>
       </View>
     </ScrollView>
