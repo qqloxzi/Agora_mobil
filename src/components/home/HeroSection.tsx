@@ -4,6 +4,10 @@ import { useRouter } from 'expo-router';
 import { Button } from '../common/Button';
 import { Ionicons } from '@expo/vector-icons';
 import { shadowStyle } from '../../lib/shadowStyle';
+import {
+  fallbackSeasonSettings,
+  fetchActiveSeasonSettings,
+} from '../../data/seasonSettings';
 
 const LEAGUES = [
   { id: 'temel-taslar', name: 'Temel Taşlar Ligi', level: '10 Kyu - 20 Kyu' },
@@ -13,6 +17,23 @@ const LEAGUES = [
 
 export function HeroSection() {
   const router = useRouter();
+  const [seasonSettings, setSeasonSettings] = React.useState(fallbackSeasonSettings);
+
+  React.useEffect(() => {
+    let active = true;
+
+    fetchActiveSeasonSettings()
+      .then((settings) => {
+        if (active) setSeasonSettings(settings);
+      })
+      .catch((error) => {
+        console.warn('Sezon ayarları yüklenemedi, yerel değerler kullanılıyor:', error);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   return (
     <View className="mb-10 mt-4 items-center">
@@ -33,12 +54,12 @@ export function HeroSection() {
         <View className="self-start rounded-full bg-accent-blue/10 border border-accent-blue/20 px-4 py-1.5 mb-5 flex-row items-center">
           <View className="w-1.5 h-1.5 rounded-full bg-accent-blue mr-2" />
           <Text className="text-[10px] font-bold tracking-widest text-accent-blue uppercase">
-            YENİ SEZON DUYURUSU
+            {seasonSettings.heroEyebrow}
           </Text>
         </View>
 
         <Text className="text-2xl font-black text-ink leading-8 mb-6">
-          2. Sezon 13 Nisan'da Başlıyor: Kayıtlar Açık!
+          {seasonSettings.heroTitle}
         </Text>
 
         <View className="mb-6">

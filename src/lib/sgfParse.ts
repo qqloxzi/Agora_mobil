@@ -263,6 +263,7 @@ function parseSgfTree(sgf: string, size: number, consecutive: boolean, coordMode
   const rootDummy: SolutionNode = { x: -1, y: -1, color: 'black', children: [] };
   const stack: SolutionNode[] = [rootDummy];
   let currentParent = rootDummy;
+  let hasExplicitStatus = false;
 
   for (const token of tokens) {
     if (token.type === 'branch_start') {
@@ -299,10 +300,20 @@ function parseSgfTree(sgf: string, size: number, consecutive: boolean, coordMode
             labels = buildLabelsFromSgf(token.text, size, consecutive, coordMode);
           }
 
+          let status: SolutionNode['status'] | undefined;
+          if (/\b(?:TE|GB)\s*\[\s*1\s*\]/i.test(token.text)) {
+            status = 'correct';
+            hasExplicitStatus = true;
+          } else if (/\b(?:BM|UC)\s*\[\s*1\s*\]/i.test(token.text)) {
+            status = 'wrong';
+            hasExplicitStatus = true;
+          }
+
           const newNode: SolutionNode = {
             x, y, color: moveColor, children: [],
             ...(comment ? { comment } : {}),
-            ...(labels && labels !== '[]' ? { labels } : {})
+            ...(labels && labels !== '[]' ? { labels } : {}),
+            ...(status ? { status } : {})
           };
           currentParent.children.push(newNode);
           currentParent = newNode;
@@ -311,17 +322,28 @@ function parseSgfTree(sgf: string, size: number, consecutive: boolean, coordMode
     }
   }
 
-  // Varsayılan olarak son yaprak düğümleri "correct" işaretleyelim (eğer birden fazla dal varsa OGS problemleri genelde en uzun dalı veya yorumu olanı doğru kabul eder, ama basitçe yaprakları correct yapabiliriz).
-  function markLeavesAsCorrect(nodes: SolutionNode[]) {
-    for (const node of nodes) {
-      if (node.children.length === 0) {
+  // Açık TE/BM/GB/UC yoksa: her kardeş dal grubunda ilk branch doğru,
+  // sonraki branch'ler yanlış. Tek çizgili eski SGF'lerde tek yaprak doğru kalır.
+  function markFirstBranchCorrect(nodes: SolutionNode[], parentIsWrong = false) {
+    nodes.forEach((node, index) => {
+      const isWrongBranch = parentIsWrong || (nodes.length > 1 && index > 0);
+
+      if (isWrongBranch) {
+        node.status = 'wrong';
+      } else if (nodes.length > 1) {
+        node.status = index === 0 ? 'correct' : 'wrong';
+      } else if (node.children.length === 0) {
         node.status = 'correct';
-      } else {
-        markLeavesAsCorrect(node.children);
       }
-    }
+
+      if (node.children.length > 0) {
+        markFirstBranchCorrect(node.children, isWrongBranch);
+      }
+    });
   }
-  markLeavesAsCorrect(rootDummy.children);
+  if (!hasExplicitStatus) {
+    markFirstBranchCorrect(rootDummy.children);
+  }
 
   return rootDummy.children;
 }

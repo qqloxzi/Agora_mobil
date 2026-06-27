@@ -39,6 +39,12 @@ export type GoProblem = {
   solution: { children: SolutionNode[] } | SolutionNode[];
   /** Optional: source SGF file under /public/lessons/ — not unique; many rows may share the same value. */
   sgf?: string;
+  /** Optional Supabase curriculum placement metadata. */
+  courseSlug?: string | null;
+  moduleSlug?: string | null;
+  moduleTitle?: string | null;
+  lessonTitle?: string | null;
+  sortOrder?: number | null;
   /**
    * Ders/tahta akışı (SGF: `LP[...]`).
    * `auto` — rakip anında oynar, ek duraklama yok.

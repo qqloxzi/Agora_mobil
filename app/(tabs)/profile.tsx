@@ -8,6 +8,23 @@ import { useAuth } from '../../src/context/AuthContext';
 import { useOnboarding } from '../../src/context/OnboardingContext';
 import { GrowthJourneyShowcase } from '../../src/components/Profile/GrowthJourneyShowcase';
 import { Sparkles } from 'lucide-react-native';
+import {
+  fetchCurriculum,
+  flattenLessons,
+  type Course,
+} from '../../src/lib/education/fetchCurriculum';
+import {
+  fetchAtolyeProgressRows,
+  type AtolyeProgressRow,
+} from '../../src/lib/education/progressStorage';
+
+type AtolyeProgressSummary = {
+  id: string;
+  title: string;
+  completed: number;
+  total: number;
+  pct: number;
+};
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
@@ -24,6 +41,7 @@ export default function ProfileScreen() {
 
   const [loadingStats, setLoadingStats] = useState(false);
   const [stats, setStats] = useState<{ xp?: number | null; rank?: string | null }>({});
+  const [atolyeProgress, setAtolyeProgress] = useState<AtolyeProgressSummary[]>([]);
 
   useEffect(() => {
     if (!user) return;
@@ -46,6 +64,14 @@ export default function ProfileScreen() {
       const mergedRank = typeof aRank === 'string' ? aRank : null;
 
       setStats({ xp: mergedXp, rank: mergedRank });
+
+      const [{ courses }, progressRows] = await Promise.all([
+        fetchCurriculum(),
+        fetchAtolyeProgressRows(user!.id),
+      ]);
+      if (!cancelled) {
+        setAtolyeProgress(buildAtolyeProgressSummary(courses, progressRows));
+      }
       setLoadingStats(false);
     }
     
@@ -162,6 +188,8 @@ export default function ProfileScreen() {
          gameStats={stats}
       />
 
+      <AtolyeProgressChart progress={atolyeProgress} />
+
       <View className="mt-8 pt-8 border-t border-slate-200 ">
         <Pressable
           onPress={onSignOut}
@@ -170,5 +198,86 @@ export default function ProfileScreen() {
         </Pressable>
       </View>
     </ScrollView>
+  );
+}
+
+function buildAtolyeProgressSummary(
+  courses: Course[],
+  progressRows: AtolyeProgressRow[]
+): AtolyeProgressSummary[] {
+  const completedLessonIds = new Set(progressRows.map((row) => String(row.lesson_id)));
+
+  return courses
+    .map((course) => {
+      const lessons = flattenLessons([course]);
+      const total = lessons.length;
+      const completed = lessons.filter((lesson) => completedLessonIds.has(String(lesson.id))).length;
+
+      return {
+        id: course.id,
+        title: course.title,
+        completed,
+        total,
+        pct: total ? Math.round((completed / total) * 100) : 0,
+      };
+    })
+    .filter((item) => item.total > 0);
+}
+
+function AtolyeProgressChart({ progress }: { progress: AtolyeProgressSummary[] }) {
+  const totals = progress.reduce(
+    (acc, item) => ({
+      completed: acc.completed + item.completed,
+      total: acc.total + item.total,
+    }),
+    { completed: 0, total: 0 }
+  );
+  const overallPct = totals.total ? Math.round((totals.completed / totals.total) * 100) : 0;
+
+  return (
+    <View className="mt-8 rounded-3xl border border-slate-200 bg-white p-5">
+      <View className="mb-5 flex-row items-end justify-between gap-3">
+        <View className="flex-1">
+          <Text className="text-[11px] font-extrabold uppercase tracking-widest text-primary-blue">
+            Atölye İlerlemesi
+          </Text>
+          <Text className="mt-1 text-xl font-extrabold text-slate-900">
+            Ders tamamlama grafiği
+          </Text>
+        </View>
+        <Text className="text-sm font-bold text-slate-500">
+          %{overallPct} · {totals.completed}/{totals.total}
+        </Text>
+      </View>
+
+      {progress.length === 0 ? (
+        <View className="rounded-2xl border border-dashed border-slate-200 px-4 py-6">
+          <Text className="text-center text-sm text-slate-500">
+            Henüz tamamlanmış Atölye dersi yok.
+          </Text>
+        </View>
+      ) : (
+        <View className="gap-4">
+          {progress.map((item) => (
+            <View key={item.id}>
+              <View className="mb-1.5 flex-row items-center justify-between gap-3">
+                <Text className="flex-1 text-sm font-bold text-slate-700" numberOfLines={1}>
+                  {item.title}
+                </Text>
+                <Text className="text-xs font-bold text-slate-500">
+                  %{item.pct} · {item.completed}/{item.total}
+                </Text>
+              </View>
+              <View className="h-2.5 overflow-hidden rounded-full bg-slate-100">
+                <View
+                  className="h-full rounded-full bg-primary-blue"
+                  style={{ width: `${Math.max(item.pct, item.completed > 0 ? 4 : 0)}%` }}
+                />
+              </View>
+            </View>
+          ))}
+        </View>
+      )}
+    </View>
   );
 }

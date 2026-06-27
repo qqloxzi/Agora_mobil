@@ -112,6 +112,10 @@ function cleanNodeComment(comment: unknown): string {
   return typeof comment === 'string' ? comment.trim() : '';
 }
 
+function nextTurnAfter(color: Color): Color {
+  return color === 'black' ? 'white' : 'black';
+}
+
 /* ═══════════════════════════════════════════════════════════════
    OYUN MOTORU — GoBoardReact.jsx ile birebir aynı mantık
 ═══════════════════════════════════════════════════════════════ */
@@ -332,16 +336,23 @@ export default function GoBoard({
       }
       setGrid(newGrid);
       setLastMove(oppNode.x !== undefined ? { x: oppNode.x, y: oppNode.y } : null);
-      setTurn(oppNode.color === 'black' ? 'white' : 'black');
+      setTurn(nextTurnAfter(oppNode.color));
       setCurrentNode(oppNode);
       setBoardHistory(h => [...h, JSON.stringify(gridAfterUser)]);
       setPendingOpponent(null);
+      if (oppNode.status === 'wrong') {
+        setStatusMsg(cleanNodeComment(oppNode.comment) || '❌ Yanlış hamle.');
+      } else if (oppNode.status === 'correct' || !oppNode.children?.length) {
+        solvedRef.current = true;
+        onSolve?.();
+        setStatusMsg(cleanNodeComment(oppNode.comment) || '✅ Doğru!');
+      }
       if ((problem?.lessonPlayback ?? 'stepAfter') === 'stepAfter' && oppNode.comment) {
         setPausePhase('afterOpponent');
       }
     }, OPPONENT_RESPONSE_DELAY_MS);
     return () => clearTimeout(timer);
-  }, [pendingOpponent, size, problem?.lessonPlayback]);
+  }, [pendingOpponent, size, problem?.lessonPlayback, onSolve]);
 
   /* currentNode değişince comment + koordinat'i dışarı aktar */
   useEffect(() => {
@@ -382,8 +393,13 @@ export default function GoBoard({
     const pos = hitTest(touchX, touchY);
     if (!pos) return;
 
+    const children: any[] = currentNode?.children ?? [];
+    const matched = !solvedRef.current
+      ? children.find((c: any) => c.x === pos.x && c.y === pos.y)
+      : null;
+    const moveColor: Color = matched?.color ?? turn;
     const snapshot = JSON.stringify(grid);
-    const result = playMove(pos.x, pos.y, turn, grid, size, boardHistory);
+    const result = playMove(pos.x, pos.y, moveColor, grid, size, boardHistory);
 
     if (!result.ok) {
       const msgs: Record<string, string> = {
@@ -401,23 +417,24 @@ export default function GoBoard({
     setBoardHistory(h => [...h, snapshot]);
     setGrid(result.newGrid!);
     setLastMove(pos);
-    const nextTurn: Color = turn === 'black' ? 'white' : 'black';
+    const nextTurn: Color = nextTurnAfter(moveColor);
     setTurn(nextTurn);
     onTurnChange?.(nextTurn);
 
     // Problem çözüm kontrolü — currentNode'un children'larına bak
     if (!solvedRef.current) {
-      const children: any[] = currentNode?.children ?? [];
-      const matched = children.find((c: any) => c.x === pos.x && c.y === pos.y && c.color === turn);
       if (matched) {
         setCurrentNode(matched);  // ← useEffect onNodeChange'i tetikler
         const isLeaf = !matched.children || matched.children.length === 0;
-        if (matched.status === 'correct' || (children.length === 1 && isLeaf)) {
+        if (matched.status === 'wrong' && isLeaf) {
+          setStatusMsg(cleanNodeComment(matched.comment) || '❌ Yanlış hamle.');
+          return;
+        }
+
+        if ((matched.status === 'correct' && isLeaf) || (!matched.status && children.length === 1 && isLeaf)) {
           solvedRef.current = true;
           onSolve?.();
-          setStatusMsg('✅ Doğru!');
-        } else if (matched.status === 'wrong') {
-          setStatusMsg('❌ Yanlış hamle.');
+          setStatusMsg(cleanNodeComment(matched.comment) || '✅ Doğru!');
         }
         // Rakibin SGF cevabını otomatik oynat (isLeaf değilse)
         if (!isLeaf && matched.children.length >= 1) {
@@ -431,7 +448,8 @@ export default function GoBoard({
           }
         }
       } else if (children.length > 0) {
-        setStatusMsg('❌ Yanlış hamle.');
+        setCurrentNode(null);
+        setStatusMsg('❌ Yanlış hamle — serbest devam edebilirsiniz.');
       }
     }
   }, [readOnly, pausePhase, grid, turn, size, boardHistory, hitTest, problem, onSolve, onTurnChange]);
@@ -476,6 +494,10 @@ export default function GoBoard({
   /* ── SVG ── */
   const stars = STAR_POINTS[size] ?? [];
   const labels = useMemo(() => parseBoardLabels(problem?.labels, size), [problem?.labels, size]);
+  const gradientSuffix = useMemo(() => `${problem?.id ?? 'board'}-${size}`.replace(/[^a-zA-Z0-9_-]/g, '-'), [problem?.id, size]);
+  const woodId = `wood-${gradientSuffix}`;
+  const blackStoneId = `blackStone-${gradientSuffix}`;
+  const whiteStoneId = `whiteStone-${gradientSuffix}`;
 
   const showHint = useCallback(() => {
     const next = (currentNode?.children ?? []).find((node: any) =>
@@ -488,41 +510,48 @@ export default function GoBoard({
   }, [currentNode]);
 
   return (
-    <View>
-      {/* Durum mesajı */}
-      {statusMsg !== '' && (
-        <View style={{
-          marginBottom: 8, paddingHorizontal: 12, paddingVertical: 6,
-          backgroundColor: statusMsg.startsWith('✅') ? '#d1fae5' : statusMsg.startsWith('❌') ? '#fee2e2' : '#fef3c7',
-          borderRadius: 10, alignSelf: 'center',
-        }}>
-          <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151' }}>{statusMsg}</Text>
-        </View>
-      )}
+    <View style={styles.boardShell}>
+      {/* Fixed status slot: prevents board jumping when feedback appears. */}
+      <View style={styles.statusSlot}>
+        {statusMsg !== '' ? (
+          <View
+            style={[
+              styles.statusBanner,
+              statusMsg.startsWith('✅')
+                ? styles.statusSuccess
+                : statusMsg.startsWith('❌')
+                  ? styles.statusError
+                  : styles.statusInfo,
+            ]}
+          >
+            <Text style={styles.statusText} numberOfLines={2}>{statusMsg}</Text>
+          </View>
+        ) : null}
+      </View>
 
       {/* Tahta */}
       <View style={[styles.boardFrame, { width: W, height: W }]}>
         <Svg width={W} height={W} style={{ borderRadius: 4 }}>
           <Defs>
-            <LinearGradient id="wood" x1="0" y1="0" x2="0" y2="1">
+            <LinearGradient id={woodId} x1="0" y1="0" x2="0" y2="1">
               <Stop offset="0%" stopColor="#F5B731" />
               <Stop offset="42%" stopColor="#EDA826" />
               <Stop offset="100%" stopColor="#D4920F" />
             </LinearGradient>
-            <RadialGradient id="blackStone" cx="35%" cy="30%" r="65%">
-              <Stop offset="0%" stopColor="#555" />
-              <Stop offset="45%" stopColor="#222" />
-              <Stop offset="100%" stopColor="#050505" />
+            <RadialGradient id={blackStoneId} cx="35%" cy="30%" r="65%">
+              <Stop offset="0%" stopColor="#5b616b" />
+              <Stop offset="42%" stopColor="#111827" />
+              <Stop offset="100%" stopColor="#020617" />
             </RadialGradient>
-            <RadialGradient id="whiteStone" cx="35%" cy="28%" r="70%">
-              <Stop offset="0%" stopColor="#fff" />
-              <Stop offset="48%" stopColor="#f0f0f0" />
-              <Stop offset="100%" stopColor="#b9b9b9" />
+            <RadialGradient id={whiteStoneId} cx="35%" cy="28%" r="70%">
+              <Stop offset="0%" stopColor="#ffffff" />
+              <Stop offset="48%" stopColor="#f8fafc" />
+              <Stop offset="100%" stopColor="#cbd5e1" />
             </RadialGradient>
           </Defs>
 
           {/* Gravity board look: warm SVG wood, no axis labels. */}
-          <Rect x={0} y={0} width={W} height={W} fill="url(#wood)" rx={8} />
+          <Rect x={0} y={0} width={W} height={W} fill={`url(#${woodId})`} rx={8} />
 
           {/* Grid yatay + dikey çizgiler */}
           {Array.from({ length: size }).map((_, i) => {
@@ -567,11 +596,16 @@ export default function GoBoard({
             return (
               <G key={`${s.x}-${s.y}`}>
                 {/* Gölge */}
-                <Circle cx={x+1} cy={y+2} r={r} fill="rgba(0,0,0,0.28)" />
+                <Circle cx={x+1} cy={y+2} r={r} fill="#000000" opacity={0.28} />
                 {/* Taş */}
                 <Circle cx={x} cy={y} r={r}
-                  fill={s.color === 'black' ? 'url(#blackStone)' : 'url(#whiteStone)'}
-                  stroke={s.color === 'black' ? 'rgba(0,0,0,0.6)' : 'rgba(80,80,80,0.3)'}
+                  fill={s.color === 'black' ? '#020617' : '#f8fafc'}
+                  stroke={s.color === 'black' ? '#000000' : '#64748b'}
+                  strokeWidth={0.7}
+                />
+                <Circle cx={x} cy={y} r={r}
+                  fill={s.color === 'black' ? `url(#${blackStoneId})` : `url(#${whiteStoneId})`}
+                  stroke={s.color === 'black' ? '#000000' : '#64748b'}
                   strokeWidth={0.7}
                 />
                 <Ellipse
@@ -579,7 +613,8 @@ export default function GoBoard({
                   cy={y - r * 0.28}
                   rx={s.color === 'black' ? r * 0.18 : r * 0.26}
                   ry={s.color === 'black' ? r * 0.11 : r * 0.16}
-                  fill={s.color === 'black' ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.75)'}
+                  fill={s.color === 'black' ? '#ffffff' : '#ffffff'}
+                  opacity={s.color === 'black' ? 0.18 : 0.75}
                 />
                 {/* Son hamle işareti */}
                 {isLast && (
@@ -645,38 +680,38 @@ export default function GoBoard({
 
       {/* Kontrol çubuğu */}
       {!readOnly && (
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: hideTurnIndicator ? 'center' : 'space-between', marginTop: 8, paddingHorizontal: 4, gap: 10 }}>
+        <View style={styles.controlsRow}>
           {/* Sıra göstergesi — ders modunda gizlenir */}
           {!hideTurnIndicator && (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <View style={styles.turnBadge}>
               <View style={{
                 width: 16, height: 16, borderRadius: 8,
                 backgroundColor: turn === 'black' ? '#1a1a1a' : '#f5f0e8',
                 borderWidth: 1, borderColor: '#888',
               }} />
-              <Text style={{ fontSize: 12, fontWeight: '600', color: '#374151' }}>
+              <Text style={styles.turnText}>
                 {turn === 'black' ? 'Siyah' : 'Beyaz'} oynuyor
               </Text>
             </View>
           )}
           {/* Gravity-style lesson board controls */}
-          <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+          <View style={styles.controlGroup}>
             <Pressable onPress={undo}
-              style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: '#f1f5f9', alignItems: 'center', justifyContent: 'center' }}>
-              <Text style={{ fontSize: 15, color: '#64748b' }}>↩</Text>
+              style={({ pressed }) => [styles.controlButton, pressed && styles.controlButtonPressed]}>
+              <Text style={styles.controlButtonText}>↩</Text>
             </Pressable>
             <Pressable onPress={reset}
-              style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: '#f1f5f9', alignItems: 'center', justifyContent: 'center' }}>
-              <Text style={{ fontSize: 15, color: '#64748b' }}>↺</Text>
+              style={({ pressed }) => [styles.controlButton, pressed && styles.controlButtonPressed]}>
+              <Text style={styles.controlButtonText}>↺</Text>
             </Pressable>
             <Pressable onPress={showHint}
-              style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: '#f1f5f9', alignItems: 'center', justifyContent: 'center' }}>
-              <Text style={{ fontSize: 15, color: '#64748b' }}>?</Text>
+              style={({ pressed }) => [styles.controlButton, pressed && styles.controlButtonPressed]}>
+              <Text style={styles.controlButtonText}>?</Text>
             </Pressable>
             {pausePhase === 'beforeOpponent' && (
               <Pressable onPress={playOpponentResponse}
-                style={{ paddingHorizontal: 12, height: 34, borderRadius: 17, backgroundColor: '#f59e0b', alignItems: 'center', justifyContent: 'center' }}>
-                <Text style={{ fontSize: 12, fontWeight: '800', color: '#fff' }}>▶ Devam</Text>
+                style={({ pressed }) => [styles.continueButton, pressed && styles.controlButtonPressed]}>
+                <Text style={styles.continueButtonText}>▶ Devam</Text>
               </Pressable>
             )}
           </View>
@@ -687,10 +722,125 @@ export default function GoBoard({
 }
 
 const styles = StyleSheet.create({
+  boardShell: {
+    alignItems: 'center',
+  },
+  statusSlot: {
+    height: 54,
+    minHeight: 54,
+    marginBottom: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+  },
+  statusBanner: {
+    maxWidth: '96%',
+    minHeight: 38,
+    paddingHorizontal: 13,
+    paddingVertical: 7,
+    borderRadius: 16,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    boxShadow: '0px 4px 14px rgba(15,23,42,0.10)',
+  } as any,
+  statusSuccess: {
+    backgroundColor: 'rgba(220,252,231,0.92)',
+    borderColor: 'rgba(74,222,128,0.45)',
+  },
+  statusError: {
+    backgroundColor: 'rgba(254,242,242,0.92)',
+    borderColor: 'rgba(252,165,165,0.55)',
+  },
+  statusInfo: {
+    backgroundColor: 'rgba(255,255,255,0.76)',
+    borderColor: 'rgba(15,23,42,0.08)',
+  },
+  statusText: {
+    fontSize: 12,
+    lineHeight: 15,
+    fontWeight: '800',
+    color: '#374151',
+    letterSpacing: 0.1,
+    textAlign: 'center',
+  },
   boardFrame: {
     position: 'relative',
-    borderRadius: 4,
+    borderRadius: 6,
     backgroundColor: '#D4920F',
-    boxShadow: '0px 8px 18px rgba(0,0,0,0.28)',
+    overflow: 'hidden',
+    boxShadow: '0px 12px 24px rgba(15,23,42,0.22)',
   } as any,
+  controlsRow: {
+    width: '100%',
+    minHeight: 42,
+    marginTop: 8,
+    paddingHorizontal: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+  },
+  turnBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.76)',
+    borderWidth: 1,
+    borderColor: 'rgba(148,163,184,0.35)',
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+  },
+  turnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#374151',
+  },
+  controlGroup: {
+    flexDirection: 'row',
+    gap: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.62)',
+    borderWidth: 1,
+    borderColor: 'rgba(148,163,184,0.25)',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+  },
+  controlButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: 'rgba(148,163,184,0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    boxShadow: '0px 3px 8px rgba(15,23,42,0.08)',
+  } as any,
+  controlButtonPressed: {
+    transform: [{ scale: 0.94 }],
+    backgroundColor: '#eef2ff',
+  },
+  controlButtonText: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#64748b',
+  },
+  continueButton: {
+    height: 36,
+    paddingHorizontal: 13,
+    borderRadius: 18,
+    backgroundColor: '#f59e0b',
+    alignItems: 'center',
+    justifyContent: 'center',
+    boxShadow: '0px 4px 10px rgba(245,158,11,0.25)',
+  } as any,
+  continueButtonText: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#fff',
+  },
 });

@@ -31,7 +31,12 @@ import {
   coursesInLevelBand,
   type CourseLevelBand,
 } from '../../src/lib/education/atolyelerSections';
-import { loadLocalCompletedIds } from '../../src/lib/education/progressStorage';
+import {
+  fetchRemoteCompletedLessonIds,
+  loadLocalCompletedIds,
+  saveLocalCompletedIds,
+  syncLocalCompletedIdsToRemote,
+} from '../../src/lib/education/progressStorage';
 import { supabase } from '../../src/lib/supabase';
 
 const LOCAL_COVERS: Record<string, ImageSourcePropType> = {
@@ -237,6 +242,18 @@ export default function AtolyelerScreen() {
 
       const ids = await loadLocalCompletedIds();
       if (!cancelled) setCompletedIds(ids);
+
+      const { data: auth } = await supabase.auth.getUser();
+      const uid = auth?.user?.id ?? null;
+      if (uid) {
+        const remoteIds = await fetchRemoteCompletedLessonIds(uid);
+        if (!cancelled) {
+          const merged = new Set([...ids, ...remoteIds]);
+          setCompletedIds(merged);
+          saveLocalCompletedIds(merged);
+          syncLocalCompletedIdsToRemote(uid, ids);
+        }
+      }
 
       const { courses: loadedCourses } = await fetchCurriculum();
       if (cancelled) return;

@@ -37,6 +37,30 @@ function normSgfName(name: string | undefined) {
     .replace(/ç/g, 'c');
 }
 
+function normKey(value: string | undefined | null) {
+  return normSgfName(value || '')
+    .replace(/&/g, ' ve ')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+function problemMatchesCourse(problem: GoProblem, def: CourseDef) {
+  if (problem.courseSlug) return normKey(problem.courseSlug) === normKey(def.slug);
+  const category = normKey(problem.category);
+  return category.split('-').join(' ').includes(normKey(def.title).split('-').join(' '));
+}
+
+function problemsForCourse(list: GoProblem[], def: CourseDef) {
+  return list
+    .filter((problem) => problemMatchesCourse(problem, def))
+    .sort((a, b) => {
+      const orderA = typeof a.sortOrder === 'number' ? a.sortOrder : Number.MAX_SAFE_INTEGER;
+      const orderB = typeof b.sortOrder === 'number' ? b.sortOrder : Number.MAX_SAFE_INTEGER;
+      if (orderA !== orderB) return orderA - orderB;
+      return normSgfName(a.sgf).localeCompare(normSgfName(b.sgf), 'tr', { numeric: true });
+    });
+}
+
 function findProblemBySgfBasename(list: GoProblem[], base: string) {
   const want = normSgfName(base);
   return list.find((p) => normSgfName(p.sgf).endsWith(want) || normSgfName(p.sgf) === want) ?? null;
@@ -170,58 +194,37 @@ const COURSE_DEFS: CourseDef[] = [
   },
 ];
 
-function buildLessons(def: CourseDef, list: GoProblem[], otherProblems: GoProblem[], courseIndex: number) {
-  const pool = otherProblems.length ? otherProblems : list;
-  const fallback = seedProblem(pool, courseIndex);
+function buildLessons(def: CourseDef, list: GoProblem[]) {
+  let problems = problemsForCourse(list, def);
 
-  if (def.lessonSource === 'tas-gelisim') {
-    const tasGelisimList =
+  if (problems.length === 0 && def.lessonSource === 'tas-gelisim') {
+    problems =
       findTasGelisimProblems(list).length > 0
         ? findTasGelisimProblems(list)
-        : [
+        : ([
             findProblemBySgfBasename(list, 'tas-gelisim-1.sgf'),
             findProblemBySgfBasename(list, 'tas-gelisim-2.sgf'),
-          ].filter(Boolean) as GoProblem[];
-
-    const problems = tasGelisimList.length > 0 ? tasGelisimList : [fallback];
-    return problems.map((problem, i) => {
-      const seeded = seedProblem([problem], i);
-      return {
-        id: `${def.id}-lesson-${i + 1}`,
-        title: `Alıştırma ${i + 1} — Oyun Yönü`,
-        body:
-          seeded.initialDescription?.trim() ||
-          (i === 0
-            ? 'Oyun yönü prensiplerini bu diyagram üzerinde inceleyin.'
-            : 'Oyun yönünü farklı bir pozisyondan ele alın.'),
-        sortOrder: i,
-        problem: seeded,
-      };
-    });
+          ].filter(Boolean) as GoProblem[]);
   }
 
-  const seeded = fallback;
-  return [
-    {
-      id: `${def.id}-lesson-1`,
-      title: 'Alıştırma 1',
+  return problems.map((problem, i) => {
+    const seeded = seedProblem([problem], i);
+    return {
+      id: `${def.id}-lesson-${i + 1}`,
+      title: problem.lessonTitle || `Alıştırma ${i + 1} — ${def.title}`,
       body:
         seeded.initialDescription?.trim() ||
-        (def.comingSoon
-          ? 'Örnek alıştırma — tam içerik yakında eklenecek.'
-          : 'Verilen pozisyonda doğru devamı bularak tahtayı tamamlayın.'),
-      sortOrder: 0,
+        'Verilen pozisyonda doğru devamı bularak tahtayı tamamlayın.',
+      sortOrder: typeof problem.sortOrder === 'number' ? problem.sortOrder : i,
       problem: seeded,
-    },
-  ];
+    };
+  });
 }
 
 export async function buildSeedCurriculum(): Promise<{ courses: Course[] }> {
   const list = await fetchProblemsFromSupabase();
   const p0 = pickProblem(list, 0);
   if (!p0) return { courses: [] };
-
-  const otherProblems = list.filter((p) => !normSgfName(p.sgf).includes('tas-gelisim'));
 
   const courses: Course[] = COURSE_DEFS.map((def, sortOrder) => ({
     id: def.id,
@@ -240,7 +243,7 @@ export async function buildSeedCurriculum(): Promise<{ courses: Course[] }> {
         title: 'Modül 1 — Uygulama',
         description: 'Tahta alıştırması',
         sortOrder: 0,
-        lessons: buildLessons(def, list, otherProblems, sortOrder),
+        lessons: buildLessons(def, list),
       },
     ],
   }));

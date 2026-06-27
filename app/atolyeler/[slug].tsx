@@ -29,6 +29,7 @@ import {
   fetchRemoteCompletedLessonIds,
   loadLocalCompletedIds, markLessonCompleted,
   saveLocalCompletedIds,
+  syncLocalCompletedIdsToRemote,
 } from '../../src/lib/education/progressStorage';
 import { supabase } from '../../src/lib/supabase';
 
@@ -123,8 +124,9 @@ function LessonContent({
   onSolvedStateChange?: (solved: boolean) => void;
 }) {
   const { width, height } = useWindowDimensions();
-  // Board: en fazla ekran yüksekliğinin %45'i veya ekran genişliği - 32
-  const boardPx = Math.min(width - 32, height * 0.45);
+  const isShortScreen = height < 720;
+  const boardMaxByHeight = height * (isShortScreen ? 0.36 : 0.42);
+  const boardPx = Math.min(width - 32, boardMaxByHeight);
 
   const [solved, setSolved] = useState(completed);
   const [activeNodeInfo, setActiveNodeInfo] = useState<{
@@ -161,12 +163,12 @@ function LessonContent({
   const introText = getLessonIntroText(lesson);
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#f7f3eb' }}>
+    <View style={{ flex: 1, backgroundColor: '#f8f3ea' }}>
 
       {/* ── Üst: tahta ── */}
-      <View style={{ alignItems: 'center', paddingHorizontal: 14, paddingTop: 10 }}>
+      <View style={{ alignItems: 'center', paddingHorizontal: 14, paddingTop: isShortScreen ? 4 : 8 }}>
         <Text
-          style={{ fontSize: 14, fontWeight: '800', color: '#1f2937', alignSelf: 'flex-start', marginBottom: 6 }}
+          style={{ fontSize: 14, fontWeight: '900', color: '#1f2937', alignSelf: 'flex-start', marginBottom: isShortScreen ? 2 : 4 }}
           numberOfLines={1}
         >
           {lesson.title}
@@ -188,14 +190,15 @@ function LessonContent({
 
       {/* ── Alt: bilgi paneli — kalan alanı doldurur ── */}
       <ScrollView
-        style={{ flex: 1, marginTop: 8, borderTopWidth: 1, borderTopColor: '#e8ddcc' }}
-        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 24 }}
+        style={{ flex: 1, marginTop: 8, borderTopWidth: 1, borderTopColor: '#eadfce' }}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 24 }}
         showsVerticalScrollIndicator={false}
       >
         {/* Gravity LessonIntroBox equivalent */}
         <View style={{
-          backgroundColor: '#fffaf0', borderRadius: 14,
-          borderWidth: 1, borderColor: '#f1d19b', padding: 13, marginBottom: 8,
+          backgroundColor: 'rgba(255,250,240,0.94)', borderRadius: 16,
+          borderWidth: 1, borderColor: '#f1d19b', padding: 13, marginBottom: 10,
+          boxShadow: '0px 6px 16px rgba(146,64,14,0.06)',
         }}>
           <Text style={{ fontSize: 10, fontWeight: '900', letterSpacing: 1.2, color: '#b45309', textTransform: 'uppercase', marginBottom: 4 }}>
             Bu alıştırmada
@@ -217,10 +220,11 @@ function LessonContent({
 
         {/* Aktif hamle yorumu — bigger card */}
         <View style={{
-          backgroundColor: activeNodeInfo ? '#f0f4ff' : '#f8fafc',
-          borderRadius: 12, borderWidth: 1,
+          backgroundColor: activeNodeInfo ? 'rgba(240,244,255,0.96)' : 'rgba(248,250,252,0.96)',
+          borderRadius: 16, borderWidth: 1,
           borderColor: activeNodeInfo ? '#c7d2fe' : '#e2e8f0',
-          padding: 14, marginBottom: 8, minHeight: 80,
+          padding: 14, marginBottom: 10, minHeight: 80,
+          boxShadow: '0px 6px 16px rgba(15,23,42,0.05)',
         }}>
           {activeNodeInfo ? (
             <>
@@ -251,9 +255,10 @@ function LessonContent({
         {/* Tebrik */}
         {solved && (
           <View style={{
-            backgroundColor: '#ecfdf5', borderRadius: 14,
+            backgroundColor: '#ecfdf5', borderRadius: 16,
             borderWidth: 1, borderColor: '#6ee7b7',
             padding: 13, flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8,
+            boxShadow: '0px 6px 16px rgba(16,185,129,0.10)',
           }}>
             <Ionicons name="checkmark-circle" size={26} color="#10b981" />
             <View style={{ flex: 1 }}>
@@ -329,11 +334,10 @@ export default function AtolyelerKursScreen() {
       if (uid) {
         const remote = await fetchRemoteCompletedLessonIds(uid);
         if (!cancelled) {
-          setCompletedIds((prev) => {
-            const merged = new Set([...prev, ...remote]);
-            saveLocalCompletedIds(merged);
-            return merged;
-          });
+          const merged = new Set([...ids, ...remote]);
+          setCompletedIds(merged);
+          saveLocalCompletedIds(merged);
+          syncLocalCompletedIdsToRemote(uid, ids);
         }
       }
 
@@ -367,7 +371,10 @@ export default function AtolyelerKursScreen() {
   const handleSolved = useCallback(async () => {
     if (!currentLesson) return;
     if (!completedIds.has(currentLesson.id)) {
-      await markLessonCompleted(userId, currentLesson.id);
+      await markLessonCompleted(userId, currentLesson.id, {
+        course: activeCourse,
+        lesson: currentLesson,
+      });
       setCompletedIds((prev) => {
         const n = new Set(prev);
         n.add(currentLesson.id);
@@ -375,7 +382,7 @@ export default function AtolyelerKursScreen() {
         return n;
       });
     }
-  }, [currentLesson, completedIds, userId]);
+  }, [currentLesson, completedIds, userId, activeCourse]);
 
   const handleNext = useCallback(() => {
     if (nextLesson) setSelectedLessonId(nextLesson.id);
