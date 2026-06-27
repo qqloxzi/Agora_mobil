@@ -211,7 +211,7 @@ function buildLessons(def: CourseDef, list: GoProblem[]) {
     const seeded = seedProblem([problem], i);
     return {
       id: `${def.id}-lesson-${i + 1}`,
-      title: problem.lessonTitle || `Alıştırma ${i + 1} — ${def.title}`,
+      title: `Alıştırma ${i + 1}`,
       body:
         seeded.initialDescription?.trim() ||
         'Verilen pozisyonda doğru devamı bularak tahtayı tamamlayın.',

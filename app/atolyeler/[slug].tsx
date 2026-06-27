@@ -82,16 +82,19 @@ function SidebarMenu({
                 style={{
                   flexDirection: 'row', alignItems: 'center', gap: 10,
                   paddingHorizontal: 16, paddingVertical: 12,
+                  borderRadius: 10,
                   backgroundColor: isSelected ? '#eff6ff' : 'transparent',
                 }}>
                 <View style={{
                   width: 22, height: 22, borderRadius: 11,
-                  backgroundColor: isDone ? '#10b981' : isSelected ? '#3b82f6' : '#e5e7eb',
+                  backgroundColor: isDone ? '#3b82f6' : '#ffffff',
+                  borderWidth: isDone ? 0 : 2,
+                  borderColor: '#d1d5db',
                   alignItems: 'center', justifyContent: 'center',
                 }}>
                   {isDone
                     ? <Ionicons name="checkmark" size={12} color="#fff" />
-                    : <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: isSelected ? '#fff' : '#9ca3af' }} />
+                    : null
                   }
                 </View>
                 <Text numberOfLines={2} style={{

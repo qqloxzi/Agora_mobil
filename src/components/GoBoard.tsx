@@ -8,6 +8,7 @@
  * Geometri: goBoardLayout.js (aynı kaynak)
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useAudioPlayer } from 'expo-audio';
 import {
   View,
   Text,
@@ -156,6 +157,7 @@ function removeGroup(x: number, y: number, color: Color, stones: BoardGrid, size
 interface PlayResult {
   ok: boolean;
   newGrid?: BoardGrid;
+  captured?: boolean;
   reason?: 'occupied' | 'suicide' | 'ko';
 }
 
@@ -204,7 +206,7 @@ function playMove(
     return { ok: false, reason: 'ko' };
   }
 
-  return { ok: true, newGrid };
+  return { ok: true, newGrid, captured };
 }
 
 /* ─── Fast-Forward: GoBoardReact.jsx loadProblemData() mantığı ──────
@@ -272,6 +274,18 @@ export default function GoBoard({
 }: GoBoardProps) {
   const { width: screenW } = useWindowDimensions();
   const W = boardSizePx ?? Math.min(screenW - 32, 380);
+  const stonePlayer = useAudioPlayer(require('../../assets/sounds/stone.mp3'), {
+    downloadFirst: true,
+    keepAudioSessionActive: true,
+  });
+  const capturePlayer = useAudioPlayer(require('../../assets/sounds/capturing.mp3'), {
+    downloadFirst: true,
+    keepAudioSessionActive: true,
+  });
+  const playStoneSound = useCallback((captured = false) => {
+    const player = captured ? capturePlayer : stonePlayer;
+    player.seekTo(0).catch(() => {}).finally(() => player.play());
+  }, [capturePlayer, stonePlayer]);
 
   const size = problem?.size ?? sizeProp;
   const { padding, cellSize } = useMemo(() => computeBoardLayout(size, W), [size, W]);
@@ -321,6 +335,7 @@ export default function GoBoard({
     const timer = setTimeout(() => {
       /* Rakibin taşını yerleştir ve esir al */
       const newGrid: BoardGrid = gridAfterUser.map(r => r.map(c => c ? { ...c } : null));
+      let captured = false;
       if (oppNode.x !== undefined && oppNode.y !== undefined) {
         newGrid[oppNode.x]![oppNode.y] = { color: oppNode.color };
         const opp: Color = oppNode.color === 'black' ? 'white' : 'black';
@@ -331,9 +346,11 @@ export default function GoBoard({
           if (isOnBoard(nx, ny, size) && newGrid[nx]?.[ny]?.color === opp &&
               getLiberties(nx, ny, opp, newGrid, size) === 0) {
             removeGroup(nx, ny, opp, newGrid, size);
+            captured = true;
           }
         }
       }
+      playStoneSound(captured);
       setGrid(newGrid);
       setLastMove(oppNode.x !== undefined ? { x: oppNode.x, y: oppNode.y } : null);
       setTurn(nextTurnAfter(oppNode.color));
@@ -352,7 +369,7 @@ export default function GoBoard({
       }
     }, OPPONENT_RESPONSE_DELAY_MS);
     return () => clearTimeout(timer);
-  }, [pendingOpponent, size, problem?.lessonPlayback, onSolve]);
+  }, [pendingOpponent, size, problem?.lessonPlayback, onSolve, playStoneSound]);
 
   /* currentNode değişince comment + koordinat'i dışarı aktar */
   useEffect(() => {
@@ -417,6 +434,7 @@ export default function GoBoard({
     setBoardHistory(h => [...h, snapshot]);
     setGrid(result.newGrid!);
     setLastMove(pos);
+    playStoneSound(Boolean(result.captured));
     const nextTurn: Color = nextTurnAfter(moveColor);
     setTurn(nextTurn);
     onTurnChange?.(nextTurn);
@@ -452,7 +470,7 @@ export default function GoBoard({
         setStatusMsg('❌ Yanlış hamle — serbest devam edebilirsiniz.');
       }
     }
-  }, [readOnly, pausePhase, grid, turn, size, boardHistory, hitTest, problem, onSolve, onTurnChange]);
+  }, [readOnly, pausePhase, grid, turn, size, boardHistory, hitTest, problem, onSolve, onTurnChange, playStoneSound]);
 
   const handleResponderRelease = useCallback(
     (evt: GestureResponderEvent) => {
