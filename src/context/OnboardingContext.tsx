@@ -15,6 +15,7 @@ import {
   saveOnboardingPersisted,
 } from '../lib/onboardingStorage';
 import {
+  fetchProfileOnboarding,
   logSupabaseError,
   mapProfileRowToAnswers,
   profileRowHasOnboardingContent,
@@ -119,37 +120,6 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
   }, [currentStep]);
 
   useEffect(() => {
-    let mounted = true;
-    async function init() {
-      const persisted = await loadOnboardingPersisted();
-      if (!mounted) return;
-      
-      setAnswers(mergeAnswers(persisted?.answers));
-      setCurrentStep(Number(persisted?.currentStep ?? 0));
-      setStatus((persisted?.status as any) ?? 'active');
-      setCompletedAt((persisted?.completedAt as string) ?? null);
-      setIsInitialized(true);
-    }
-    init();
-
-    cleanupExpiredPendingOnboarding();
-    flushPendingOnboardingToSupabase(supabase).catch(() => {});
-    
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'SIGNED_IN') {
-        cleanupExpiredPendingOnboarding();
-        flushPendingOnboardingToSupabase(supabase).catch(() => {});
-      }
-    });
-    return () => {
-      mounted = false;
-      subscription.unsubscribe();
-    };
-  }, []);
-
-  useEffect(() => {
     if (isInitialized) {
       saveOnboardingPersisted({
         answers,
@@ -206,6 +176,55 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
       });
     }
   }, [totalSteps]);
+
+  const hydrateOnboardingFromServer = useCallback(async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { data, error } = await fetchProfileOnboarding(supabase, user.id);
+    if (error || !data) return;
+
+    if (data.onboarding_completed_at || profileRowHasOnboardingContent(data)) {
+      syncOnboardingFromRemote(data);
+    }
+  }, [syncOnboardingFromRemote]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function init() {
+      const persisted = await loadOnboardingPersisted();
+      if (!mounted) return;
+
+      setAnswers(mergeAnswers(persisted?.answers));
+      setCurrentStep(Number(persisted?.currentStep ?? 0));
+      setStatus((persisted?.status as any) ?? 'active');
+      setCompletedAt((persisted?.completedAt as string) ?? null);
+
+      await hydrateOnboardingFromServer();
+
+      if (mounted) setIsInitialized(true);
+    }
+
+    void init();
+    cleanupExpiredPendingOnboarding();
+    void flushPendingOnboardingToSupabase(supabase);
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_IN') {
+        cleanupExpiredPendingOnboarding();
+        void flushPendingOnboardingToSupabase(supabase);
+        void hydrateOnboardingFromServer();
+      }
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, [hydrateOnboardingFromServer]);
 
   const hydrateForEdit = useCallback((partialAnswers: any) => {
     const merged = mergeAnswers(partialAnswers);

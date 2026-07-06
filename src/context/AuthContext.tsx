@@ -1,7 +1,10 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { Session, User } from '@supabase/supabase-js';
+import type { User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
+
+/** Eski sürümdeki manuel oturum önbelleği — geçersiz yönlendirmeyi önlemek için temizle */
+const LEGACY_SESSION_KEY = 'supabase_session';
 
 type AuthContextType = {
   user: User | null;
@@ -18,36 +21,26 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const init = async () => {
-      const stored = await AsyncStorage.getItem('supabase_session');
-      if (stored) {
-        try {
-          const session: Session = JSON.parse(stored);
-          setUser(session.user ?? null);
-        } catch {
-          await AsyncStorage.removeItem('supabase_session');
-        }
-      }
+    let mounted = true;
 
-      const { data } = await supabase.auth.getSession();
+    AsyncStorage.removeItem(LEGACY_SESSION_KEY).catch(() => {});
+
+    supabase.auth.getSession().then(({ data }) => {
+      if (!mounted) return;
       setUser(data.session?.user ?? null);
       setLoading(false);
-    };
-
-    init();
+    });
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!mounted) return;
       setUser(session?.user ?? null);
-      if (session) {
-        AsyncStorage.setItem('supabase_session', JSON.stringify(session));
-      } else {
-        AsyncStorage.removeItem('supabase_session');
-      }
+      setLoading(false);
     });
 
     return () => {
+      mounted = false;
       subscription.unsubscribe();
     };
   }, []);
@@ -60,4 +53,3 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 };
 
 export const useAuth = () => useContext(AuthContext);
-

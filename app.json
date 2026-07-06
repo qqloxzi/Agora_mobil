@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "Agora_mobil",
-    "slug": "Agora_mobil",
+    "name": "Agora Go Akademisi",
+    "slug": "agora-go-akademisi",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -22,7 +22,9 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.agoragoakademisi.app",
+      "versionCode": 1
     },
     "web": {
       "bundler": "metro",
@@ -30,10 +32,19 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
-      "expo-router"
+      "expo-router",
+      "expo-asset",
+      "expo-audio"
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "6bca58f9-54e7-4626-8bfd-2ad4b5306f32"
+      }
+    },
+    "owner": "annen"
   }
 }

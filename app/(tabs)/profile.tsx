@@ -17,6 +17,16 @@ import {
   fetchAtolyeProgressRows,
   type AtolyeProgressRow,
 } from '../../src/lib/education/progressStorage';
+import {
+  extractProfileDisplayFields,
+  fetchProfileOnboarding,
+} from '../../src/lib/profileOnboarding';
+
+type ProfileFields = {
+  preferredName: string | null;
+  targetLeagueLevel: string | null;
+  xp: number | null;
+};
 
 type AtolyeProgressSummary = {
   id: string;
@@ -40,7 +50,12 @@ export default function ProfileScreen() {
   } = useOnboarding();
 
   const [loadingStats, setLoadingStats] = useState(false);
-  const [stats, setStats] = useState<{ xp?: number | null; rank?: string | null }>({});
+  const [stats, setStats] = useState<{ xp?: number | null; rank?: string | null; username?: string | null }>({});
+  const [profileFields, setProfileFields] = useState<ProfileFields>({
+    preferredName: null,
+    targetLeagueLevel: null,
+    xp: null,
+  });
   const [atolyeProgress, setAtolyeProgress] = useState<AtolyeProgressSummary[]>([]);
 
   useEffect(() => {
@@ -49,21 +64,30 @@ export default function ProfileScreen() {
 
     async function loadStats() {
       setLoadingStats(true);
-      const [r1, r2] = await Promise.all([
-        supabase.from('profiles').select('xp').eq('id', user!.id).maybeSingle(),
-        supabase.from('agorasusers').select('xp, rank').eq('id', user!.id).maybeSingle()
+      const [{ data: profRow }, agResult] = await Promise.all([
+        fetchProfileOnboarding(supabase, user!.id),
+        supabase.from('agorasusers').select('username, xp, rank').eq('id', user!.id).maybeSingle(),
       ]);
 
       if (cancelled) return;
 
-      const pXp = r1.data?.xp;
-      const aXp = r2.data?.xp;
-      const aRank = r2.data?.rank;
+      const profileSnapshot = extractProfileDisplayFields(profRow);
+      setProfileFields(profileSnapshot);
 
-      const mergedXp = typeof pXp === 'number' ? pXp : (typeof aXp === 'number' ? aXp : null);
+      const aXp = agResult.data?.xp;
+      const aRank = agResult.data?.rank;
+      const aUsername =
+        typeof agResult.data?.username === 'string' ? agResult.data.username.trim() : '';
+
+      const mergedXp =
+        profileSnapshot.xp != null
+          ? profileSnapshot.xp
+          : typeof aXp === 'number'
+            ? aXp
+            : null;
       const mergedRank = typeof aRank === 'string' ? aRank : null;
 
-      setStats({ xp: mergedXp, rank: mergedRank });
+      setStats({ xp: mergedXp, rank: mergedRank, username: aUsername || null });
 
       const [{ courses }, progressRows] = await Promise.all([
         fetchCurriculum(),
@@ -166,6 +190,10 @@ export default function ProfileScreen() {
      );
   }
 
+  const preferredName = answers?.preferredName != null ? String(answers.preferredName).trim() : '';
+  const displayTitle =
+    profileFields.preferredName || preferredName || stats.username || user.email?.split('@')[0] || 'Oyuncu';
+
   // Oturum açmış ve anket tamamlanmış
   return (
     <ScrollView
@@ -176,16 +204,21 @@ export default function ProfileScreen() {
       <View className="mb-8">
         <Text className="text-3xl font-bold tracking-tight text-neutral-900 ">Merhaba,</Text>
         <Text className="text-primary-blue text-3xl font-extrabold tracking-tight mb-2">
-           {answers?.preferredName || user.email?.split('@')[0]}
+           {displayTitle}
         </Text>
         <Text className="text-neutral-500 ">{user.email}</Text>
       </View>
 
       <GrowthJourneyShowcase
-         answers={answers}
+         answers={{
+           ...answers,
+           target_league_level:
+             profileFields.targetLeagueLevel || answers?.target_league_level || '',
+         }}
          onUpdateClick={handleUpdateClick}
          variant="profilePage"
          gameStats={stats}
+         profileFields={profileFields}
       />
 
       <AtolyeProgressChart progress={atolyeProgress} />

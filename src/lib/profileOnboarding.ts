@@ -52,6 +52,22 @@ function rowTargetLeagueLevel(row: any) {
   return v != null ? String(v) : '';
 }
 
+export function extractProfileDisplayFields(row: any) {
+  if (!row || typeof row !== 'object') {
+    return { preferredName: null, targetLeagueLevel: null, xp: null };
+  }
+  const preferredRaw = row.preferred_name;
+  const preferredName =
+    preferredRaw != null && String(preferredRaw).trim() !== ''
+      ? String(preferredRaw).trim()
+      : null;
+  const leagueRaw = rowTargetLeagueLevel(row);
+  const targetLeagueLevel =
+    leagueRaw != null && String(leagueRaw).trim() !== '' ? String(leagueRaw).trim() : null;
+  const xp = typeof row.xp === 'number' && Number.isFinite(row.xp) ? row.xp : null;
+  return { preferredName, targetLeagueLevel, xp };
+}
+
 export function profileRowHasOnboardingContent(row: any) {
   if (!row || typeof row !== 'object') return false;
   const w = rowWeaknesses(row);

@@ -22,7 +22,7 @@ export function invalidateProblemsCache() {
 }
 
 export async function fetchProblemsFromSupabase(): Promise<GoProblem[]> {
-  if (cached && !__DEV__) return cached;
+  if (cached) return cached; // Cache works in all environments — re-fetch only on invalidate()
 
   let rows: GoProblemsRow[] | null = null;
 

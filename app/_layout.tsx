@@ -3,6 +3,7 @@ import React from 'react';
 import 'react-native-reanimated';
 import { AuthProvider } from '../src/context/AuthContext';
 import { OnboardingProvider } from '../src/context/OnboardingContext';
+import { AuthDeepLinkHandler } from '../src/components/AuthDeepLinkHandler';
 
 import "../global.css";
 
@@ -14,6 +15,7 @@ export default function RootLayout() {
   return (
     <AuthProvider>
       <OnboardingProvider>
+        <AuthDeepLinkHandler />
         <Stack screenOptions={{ headerShown: false }} initialRouteName="(tabs)">
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="(auth)" />

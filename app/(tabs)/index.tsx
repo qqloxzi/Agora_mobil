@@ -6,6 +6,7 @@ import { HeroSection } from '../../src/components/home/HeroSection';
 import { FeaturesSection } from '../../src/components/home/FeaturesSection';
 import { PhilosophySection } from '../../src/components/home/PhilosophySection';
 import { ProtocolSection } from '../../src/components/home/ProtocolSection';
+import { FixturSection } from '../../src/components/home/FixturSection';
 import FAQ from '../../src/components/home/FAQ';
 
 export default function HomeScreen() {
@@ -28,7 +29,11 @@ export default function HomeScreen() {
       </View>
 
       <ProtocolSection />
+
+      <FixturSection />
+
       <FAQ />
     </ScrollView>
   );
 }
+

@@ -5,75 +5,46 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as WebBrowser from 'expo-web-browser';
-import * as Linking from 'expo-linking';
 import { makeRedirectUri } from 'expo-auth-session';
+import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../src/lib/supabase';
 import { useAuth } from '../../src/context/AuthContext';
+import { completeSupabaseSessionFromUrl } from '../../src/lib/authSessionFromUrl';
 
-/* OAuth callback'i uygulamada tamamlamak için gerekli */
 WebBrowser.maybeCompleteAuthSession();
-
-async function completeSupabaseSessionFromUrl(url: string) {
-  const parsed = new URL(url);
-  const code = parsed.searchParams.get('code');
-  if (code) return supabase.auth.exchangeCodeForSession(code);
-
-  const hashParams = new URLSearchParams(parsed.hash.replace(/^#/, ''));
-  const accessToken = hashParams.get('access_token') ?? parsed.searchParams.get('access_token');
-  const refreshToken = hashParams.get('refresh_token') ?? parsed.searchParams.get('refresh_token');
-  if (accessToken && refreshToken) {
-    return supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
-  }
-
-  return { data: null, error: null };
-}
 
 export default function LoginScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { loading: authLoading } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  /* ── Deep link dinleyici ── */
   useEffect(() => {
-    const handleUrl = async ({ url }: { url: string }) => {
-      if (!url.includes('access_token') && !url.includes('code=')) return;
-      await completeSupabaseSessionFromUrl(url);
-    };
-    const sub = Linking.addEventListener('url', handleUrl);
-    Linking.getInitialURL().then((url) => { if (url) handleUrl({ url }); });
-    return () => sub.remove();
-  }, []);
+    if (user) {
+      router.replace('/(tabs)');
+    }
+  }, [user, router]);
 
-  /* ── Google Sign-In ──
-   *
-   * Expo Go'da "agoramobil://" scheme çalışmaz → useProxy: true ile
-   * Expo'nun auth.expo.io proxy'si kullanılır; bu sayede Expo Go'da da
-   * tarayıcı kapanıp session kurulur.
-   *
-   * Üretim (standalone) build'de useProxy: false, scheme: 'agoramobil' kullanılır.
-   */
   const onSignInWithGoogle = async () => {
     setGoogleLoading(true);
     setError(null);
 
     try {
-      // Platform kontrolü: web vs native
       const isWeb = Platform.OS === 'web';
+      const isExpoGo = Constants.appOwnership === 'expo';
 
-      // Expo Go'da mı yoksa production build'de mi?
-      // __DEV__ + Platform.OS !== 'web' → Expo Go veya dev build
       const redirectTo = isWeb
-        ? `${(window as any).location.origin}/`
+        ? `${window.location.origin}/`
         : makeRedirectUri({
             scheme: 'agoramobil',
             path: 'auth/callback',
+            ...(isExpoGo ? { useProxy: true } : {}),
           });
 
       const { data, error: oauthError } = await supabase.auth.signInWithOAuth({
@@ -92,13 +63,18 @@ export default function LoginScreen() {
         if (result.type === 'success' && result.url) {
           const { error: sessionError } = await completeSupabaseSessionFromUrl(result.url);
           if (sessionError) setError(sessionError.message);
-        } else if (result.type === 'cancel') {
-          setError('Giriş iptal edildi.');
+        } else {
+          const { data: sessionData } = await supabase.auth.getSession();
+          if (!sessionData.session) {
+            if (result.type === 'cancel') {
+              setError('Giriş iptal edildi.');
+            } else if (result.type === 'dismiss') {
+              setError('Google girişi tamamlanamadı. Tekrar deneyin.');
+            }
+          }
         }
-        // 'dismiss' → tarayıcı kapandı ama URL yok (Expo Go deep link problemi)
-        // Bu durumda session token varsa onAuthStateChange yakalar
       } else if (isWeb && data?.url) {
-        (window as any).location.href = data.url;
+        window.location.href = data.url;
       }
     } catch (e: any) {
       setError(e.message ?? 'Google ile giriş başarısız.');
@@ -107,12 +83,30 @@ export default function LoginScreen() {
     }
   };
 
-  /* ── Email/Şifre ── */
   const onSignInWithPassword = async () => {
+    if (!email.trim() || !password) {
+      setError('E-posta ve şifre gerekli.');
+      return;
+    }
+
     setSubmitting(true);
     setError(null);
-    const { error: err } = await supabase.auth.signInWithPassword({ email, password });
-    if (err) setError(err.message);
+
+    const { data, error: err } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    });
+
+    if (err) {
+      setError(
+        err.message === 'Invalid login credentials'
+          ? 'E-posta veya şifre hatalı.'
+          : err.message
+      );
+    } else if (data.session) {
+      router.replace('/(tabs)');
+    }
+
     setSubmitting(false);
   };
 
@@ -160,7 +154,6 @@ export default function LoginScreen() {
           <View className="flex-1 h-px bg-gray-200" />
         </View>
 
-        {/* Google Sign-In */}
         <Pressable onPress={onSignInWithGoogle} disabled={googleLoading}
           className="w-full flex-row items-center justify-center gap-3 rounded-2xl border border-gray-200 bg-white py-4 mb-10 active:bg-gray-50">
           {googleLoading
@@ -172,12 +165,10 @@ export default function LoginScreen() {
           }
         </Pressable>
 
-        {/* Expo Go uyarısı — sadece development modda göster */}
         {__DEV__ && Platform.OS !== 'web' && (
           <View className="mb-6 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
             <Text className="text-xs text-amber-700 text-center leading-relaxed">
-              <Text className="font-bold">Geliştirme modu:</Text> Google girişi Expo Go'da tarayıcıyı kapatmayabilir.{'\n'}
-              Üretim build'de sorunsuz çalışır.
+              <Text className="font-bold">Geliştirme modu:</Text> Google girişi için Supabase Redirect URLs listesine Expo proxy adresini ekleyin.
             </Text>
           </View>
         )}

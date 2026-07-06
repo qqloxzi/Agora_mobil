@@ -209,6 +209,19 @@ function playMove(
   return { ok: true, newGrid, captured };
 }
 
+/* ─── Non-first branch'leri otomatik 'wrong' işaretle ─────────────
+   SGF'de her dallanmada ilk child doğru yol, diğerleri yanlış.
+   Bu fonksiyon tüm ağacı gezer ve non-first child'lara status:'wrong' atar.
+   Eğer node'un zaten status'u varsa değiştirmez.
+────────────────────────────────────────────────────────────────── */
+function markNonFirstBranchesWrong(node: any, isWrongBranch = false): void {
+  if (!node) return;
+  if (isWrongBranch && !node.status) node.status = 'wrong';
+  (node.children ?? []).forEach((child: any, i: number) =>
+    markNonFirstBranchesWrong(child, isWrongBranch || i > 0)
+  );
+}
+
 /* ─── Fast-Forward: GoBoardReact.jsx loadProblemData() mantığı ──────
    Çözüm ağacında tek devam yolu varken hamleleri otomatik oyna;
    yorum veya dallanma noktasında dur (kullanıcıya soru sor).
@@ -219,6 +232,9 @@ function computeFastForwardState(
   solutionTree: any,
   size: number
 ): { grid: BoardGrid; turn: Color; lastMove: { x: number; y: number } | null; currentNode: any; history: string[] } {
+  // Non-first dalları wrong olarak işaretle
+  markNonFirstBranchesWrong(solutionTree);
+
   let grid: BoardGrid = baseGrid.map(row => row.map(c => c ? { ...c } : null));
   let turn: Color = baseTurn;
   let lastMove: { x: number; y: number } | null = null;
@@ -317,6 +333,38 @@ export default function GoBoard({
   const solvedRef = useRef(false);
   const [hintPos, setHintPos] = useState<{ x: number; y: number } | null>(null);
   const [pausePhase, setPausePhase] = useState<'beforeOpponent' | 'afterOpponent' | null>(null);
+  const wrongTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // currentNode.labels'a göre etiketleri güncelle (Gravity syncLabels mantığı)
+  const [currentNodeLabels, setCurrentNodeLabels] = useState<(BoardLabelCell | null)[][] >(() =>
+    Array.from({ length: initState.currentNode?.labels ? size : size }, () => Array<BoardLabelCell | null>(size).fill(null))
+  );
+
+  // Her currentNode değişiminde etiketleri senkronize et
+  useEffect(() => {
+    const emptyLabels = Array.from({ length: size }, () => Array<BoardLabelCell | null>(size).fill(null));
+    const n = currentNode;
+    if (!n || !n.labels) {
+      setCurrentNodeLabels(emptyLabels);
+      return;
+    }
+    try {
+      const parsed = typeof n.labels === 'string' ? JSON.parse(n.labels) : n.labels;
+      if (Array.isArray(parsed)) {
+        const mapped = emptyLabels.map((col, x) =>
+          col.map((_, y) => {
+            const cell = parsed[x]?.[y];
+            return cell && typeof cell === 'object' ? (cell as BoardLabelCell) : null;
+          })
+        );
+        setCurrentNodeLabels(mapped);
+      } else {
+        setCurrentNodeLabels(emptyLabels);
+      }
+    } catch {
+      setCurrentNodeLabels(emptyLabels);
+    }
+  }, [currentNode, size]);
 
   /* Rakip hamle otomatik oynatma: { node, gridAfterUserMove } */
   const [pendingOpponent, setPendingOpponent] = useState<{
@@ -357,14 +405,18 @@ export default function GoBoard({
       setCurrentNode(oppNode);
       setBoardHistory(h => [...h, JSON.stringify(gridAfterUser)]);
       setPendingOpponent(null);
+      // checkStatus: wrong veya doğru leaf node kontrolü
       if (oppNode.status === 'wrong') {
         setStatusMsg(cleanNodeComment(oppNode.comment) || '❌ Yanlış hamle.');
+        onSolve?.();
       } else if (oppNode.status === 'correct' || !oppNode.children?.length) {
+        // Leaf node — doğru çözüm
         solvedRef.current = true;
         onSolve?.();
         setStatusMsg(cleanNodeComment(oppNode.comment) || '✅ Doğru!');
       }
-      if ((problem?.lessonPlayback ?? 'stepAfter') === 'stepAfter' && oppNode.comment) {
+      // 'auto' modunda comment pause'u yok, stepAfter için koru
+      if ((problem?.lessonPlayback ?? 'auto') === 'stepAfter' && oppNode.comment) {
         setPausePhase('afterOpponent');
       }
     }, OPPONENT_RESPONSE_DELAY_MS);
@@ -442,21 +494,39 @@ export default function GoBoard({
     // Problem çözüm kontrolü — currentNode'un children'larına bak
     if (!solvedRef.current) {
       if (matched) {
-        setCurrentNode(matched);  // ← useEffect onNodeChange'i tetikler
+        setCurrentNode(matched);
         const isLeaf = !matched.children || matched.children.length === 0;
-        if (matched.status === 'wrong' && isLeaf) {
-          setStatusMsg(cleanNodeComment(matched.comment) || '❌ Yanlış hamle.');
+
+        if (matched.status === 'wrong') {
+          // Yanlış dal: rakibin cevabını da göster (isLeaf değilse)
+          setStatusMsg(cleanNodeComment(matched.comment) || '');
+          if (!isLeaf && matched.children.length >= 1) {
+            const playback = problem?.lessonPlayback ?? 'auto';
+            if (playback === 'stepBefore') {
+              setPausePhase('beforeOpponent');
+              setPendingOpponent({ node: matched.children[0], gridAfterUser: result.newGrid!, paused: true });
+            } else {
+              // auto veya stepAfter: rakip otomatik yanıt verir, sonra onSolve tetiklenir
+              setPendingOpponent({ node: matched.children[0], gridAfterUser: result.newGrid! });
+            }
+          } else {
+            // Yanlış leaf: hemen bildir
+            setStatusMsg(cleanNodeComment(matched.comment) || '❌ Yanlış hamle.');
+            onSolve?.();
+          }
           return;
         }
 
-        if ((matched.status === 'correct' && isLeaf) || (!matched.status && children.length === 1 && isLeaf)) {
+        if ((matched.status === 'correct' && isLeaf) || (!matched.status && isLeaf)) {
           solvedRef.current = true;
           onSolve?.();
           setStatusMsg(cleanNodeComment(matched.comment) || '✅ Doğru!');
+          return;
         }
+
         // Rakibin SGF cevabını otomatik oynat (isLeaf değilse)
         if (!isLeaf && matched.children.length >= 1) {
-          const playback = problem?.lessonPlayback ?? 'stepAfter';
+          const playback = problem?.lessonPlayback ?? 'auto';
           if (playback === 'stepBefore') {
             setStatusMsg(cleanNodeComment(matched.comment) || 'Devam ederek rakibin cevabını gör.');
             setPausePhase('beforeOpponent');
@@ -468,6 +538,7 @@ export default function GoBoard({
       } else if (children.length > 0) {
         setCurrentNode(null);
         setStatusMsg('❌ Yanlış hamle — serbest devam edebilirsiniz.');
+        onSolve?.();
       }
     }
   }, [readOnly, pausePhase, grid, turn, size, boardHistory, hitTest, problem, onSolve, onTurnChange, playStoneSound]);
@@ -511,7 +582,8 @@ export default function GoBoard({
 
   /* ── SVG ── */
   const stars = STAR_POINTS[size] ?? [];
-  const labels = useMemo(() => parseBoardLabels(problem?.labels, size), [problem?.labels, size]);
+  // currentNode'a göre etiketler (syncLabels mantığı) — problem.labels artık kullanılmıyor
+  const labels = currentNodeLabels;
   const gradientSuffix = useMemo(() => `${problem?.id ?? 'board'}-${size}`.replace(/[^a-zA-Z0-9_-]/g, '-'), [problem?.id, size]);
   const woodId = `wood-${gradientSuffix}`;
   const blackStoneId = `blackStone-${gradientSuffix}`;

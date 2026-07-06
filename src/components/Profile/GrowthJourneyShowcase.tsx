@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
-import { Award, Crosshair, Sparkles, Target, Zap, Shield } from 'lucide-react-native';
+import { Award, Crosshair, Sparkles, Target, Zap, Shield, User } from 'lucide-react-native';
 import Svg, { Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
 import {
   getDifficultyLabel,
@@ -100,14 +100,21 @@ export function GrowthJourneyShowcase({
   onUpdateClick,
   variant = 'default',
   gameStats,
+  profileFields,
 }: {
   answers: any;
   onUpdateClick?: () => void;
   variant?: 'default' | 'profilePage';
   gameStats?: { xp?: number | null; rank?: string | null };
+  profileFields?: {
+    preferredName?: string | null;
+    targetLeagueLevel?: string | null;
+    xp?: number | null;
+  };
 }) {
   const onProfilePage = variant === 'profilePage';
   const gs = gameStats ?? {};
+  const pf = profileFields ?? {};
   const levelLabel = getLevelLabel(answers.level);
   const difficulties: string[] = answers.difficulties ?? [];
   const internalGoals: string[] = Array.isArray(answers.internalGoals) ? answers.internalGoals : [];
@@ -116,13 +123,28 @@ export function GrowthJourneyShowcase({
   const playingLabel = answers.playingDuration ? getPlayingDurationLabel(String(answers.playingDuration)) : null;
 
   const legacyTarget = answers.targetGoal ? parseTargetGoal(answers.targetGoal) : null;
-  const leagueTargetParsed = answers.target_league_level ? parseTargetGoal(String(answers.target_league_level)) : null;
+  const leagueLevelRaw =
+    pf.targetLeagueLevel != null && String(pf.targetLeagueLevel).trim() !== ''
+      ? String(pf.targetLeagueLevel).trim()
+      : answers.target_league_level != null
+        ? String(answers.target_league_level).trim()
+        : '';
+  const leagueTargetParsed = leagueLevelRaw ? parseTargetGoal(leagueLevelRaw) : null;
   const heroTargetLabel = leagueTargetParsed?.label ?? (legacyTarget ? legacyTarget.label : null);
 
   if (onProfilePage) {
-    const xpVal = gs.xp != null && typeof gs.xp === 'number' ? gs.xp : null;
+    const preferredNameVal =
+      pf.preferredName != null && String(pf.preferredName).trim() !== ''
+        ? String(pf.preferredName).trim()
+        : null;
+    const xpVal =
+      pf.xp != null && typeof pf.xp === 'number'
+        ? pf.xp
+        : gs.xp != null && typeof gs.xp === 'number'
+          ? gs.xp
+          : null;
     const rankVal = gs.rank != null && String(gs.rank).trim() !== '' ? String(gs.rank).trim() : null;
-    const targetDisplay = heroTargetLabel ?? null;
+    const targetDisplay = heroTargetLabel ?? leagueLevelRaw || null;
     const hasDetail = (hoursLabel && hoursLabel !== '—') || playingLabel || difficulties.length > 0 || internalGoals.length > 0;
 
     return (
@@ -133,6 +155,13 @@ export function GrowthJourneyShowcase({
 
         <View className="flex-col w-full">
           <ProfileStatTile
+            icon={User}
+            iconBgClass="bg-violet-100 dark:bg-violet-900/40"
+            iconColor="#7c3aed"
+            value={preferredNameVal}
+            label="Tercih edilen isim"
+          />
+          <ProfileStatTile
             icon={Zap}
             iconBgClass="bg-accent-blue/15 dark:bg-accent-blue/25"
             iconColor="#0ea5e9"
@@ -140,11 +169,11 @@ export function GrowthJourneyShowcase({
             label="Toplam XP"
           />
           <ProfileStatTile
-            icon={Shield}
-            iconBgClass="bg-primary-blue/10 dark:bg-primary-blue/25"
-            iconColor="#2563eb"
-            value={rankVal}
-            label="Mevcut lig"
+            icon={Target}
+            iconBgClass="bg-amber-100 dark:bg-amber-900/40"
+            iconColor="#d97706"
+            value={targetDisplay}
+            label="Hedef lig seviyesi"
           />
           <ProfileStatTile
             icon={Award}
@@ -154,11 +183,11 @@ export function GrowthJourneyShowcase({
             label="Mevcut seviye"
           />
           <ProfileStatTile
-            icon={Target}
-            iconBgClass="bg-amber-100 dark:bg-amber-900/40"
-            iconColor="#d97706"
-            value={targetDisplay}
-            label="Hedef seviye"
+            icon={Shield}
+            iconBgClass="bg-primary-blue/10 dark:bg-primary-blue/25"
+            iconColor="#2563eb"
+            value={rankVal}
+            label="Mevcut lig"
           />
         </View>
 

@@ -27,9 +27,9 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
         detectSessionInUrl: false,
       }
     : {
-        storage: AsyncStorage,          // Session'ı kalıcı olarak sakla
-        persistSession: true,           // Uygulama yeniden açılınca oturum korunsun
+        storage: AsyncStorage,
+        persistSession: true,
         autoRefreshToken: true,
-        detectSessionInUrl: false,      // Mobilde URL detection devre dışı (native deep link kullanıyoruz)
+        detectSessionInUrl: Platform.OS === 'web',
       },
 });
