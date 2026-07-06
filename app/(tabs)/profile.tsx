@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, Pressable, ScrollView, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { View, Text, Pressable, ScrollView, ActivityIndicator, TouchableOpacity, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,6 +21,7 @@ import {
   extractProfileDisplayFields,
   fetchProfileOnboarding,
 } from '../../src/lib/profileOnboarding';
+import { signInWithGoogle } from '../../src/lib/googleSignIn';
 
 type ProfileFields = {
   preferredName: string | null;
@@ -57,6 +58,7 @@ export default function ProfileScreen() {
     xp: null,
   });
   const [atolyeProgress, setAtolyeProgress] = useState<AtolyeProgressSummary[]>([]);
+  const [googleLoading, setGoogleLoading] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -129,6 +131,17 @@ export default function ProfileScreen() {
      );
   }
 
+  const handleGoogleSignIn = async () => {
+    setGoogleLoading(true);
+    try {
+      await signInWithGoogle();
+    } finally {
+      if (Platform.OS !== 'web') {
+        setGoogleLoading(false);
+      }
+    }
+  };
+
   // Oturum açmamış
   if (!user) {
     return (
@@ -141,10 +154,17 @@ export default function ProfileScreen() {
         </Text>
         
         <Pressable
-          onPress={() => router.push('/(auth)')}
+          onPress={handleGoogleSignIn}
+          disabled={googleLoading}
           className="w-full flex-row items-center justify-center gap-2 rounded-2xl border border-neutral-200  bg-white  py-4 active:opacity-80 mb-4">
-          <Ionicons name="logo-google" size={20} color="#3b82f6" />
-          <Text className="text-base font-semibold text-neutral-800 ">Google ile Devam Et</Text>
+          {googleLoading ? (
+            <ActivityIndicator color="#3b82f6" />
+          ) : (
+            <>
+              <Ionicons name="logo-google" size={20} color="#3b82f6" />
+              <Text className="text-base font-semibold text-neutral-800 ">Google ile Devam Et</Text>
+            </>
+          )}
         </Pressable>
         <Pressable
           onPress={() => router.push('/(auth)')}

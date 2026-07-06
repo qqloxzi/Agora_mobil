@@ -19,6 +19,7 @@ export default function RootLayout() {
         <Stack screenOptions={{ headerShown: false }} initialRouteName="(tabs)">
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="(auth)" />
+          <Stack.Screen name="auth/callback" options={{ headerShown: false }} />
           <Stack.Screen name="course-detail/[slug]" options={{ presentation: 'card' }} />
           <Stack.Screen name="atolyeler-detay/[slug]" options={{ presentation: 'card' }} />
           <Stack.Screen name="atolyeler/[slug]" options={{ presentation: 'card' }} />

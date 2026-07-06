@@ -144,7 +144,7 @@ export function GrowthJourneyShowcase({
           ? gs.xp
           : null;
     const rankVal = gs.rank != null && String(gs.rank).trim() !== '' ? String(gs.rank).trim() : null;
-    const targetDisplay = heroTargetLabel ?? leagueLevelRaw || null;
+    const targetDisplay = heroTargetLabel ?? (leagueLevelRaw || null);
     const hasDetail = (hoursLabel && hoursLabel !== '—') || playingLabel || difficulties.length > 0 || internalGoals.length > 0;
 
     return (

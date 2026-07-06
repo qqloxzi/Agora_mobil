@@ -5,13 +5,12 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as WebBrowser from 'expo-web-browser';
-import { makeRedirectUri } from 'expo-auth-session';
-import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../src/lib/supabase';
 import { useAuth } from '../../src/context/AuthContext';
-import { completeSupabaseSessionFromUrl } from '../../src/lib/authSessionFromUrl';
+import { signInWithGoogle } from '../../src/lib/googleSignIn';
+import { getAuthRedirectUri } from '../../src/lib/authRedirect';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -36,50 +35,16 @@ export default function LoginScreen() {
     setError(null);
 
     try {
-      const isWeb = Platform.OS === 'web';
-      const isExpoGo = Constants.appOwnership === 'expo';
-
-      const redirectTo = isWeb
-        ? `${window.location.origin}/`
-        : makeRedirectUri({
-            scheme: 'agoramobil',
-            path: 'auth/callback',
-            ...(isExpoGo ? { useProxy: true } : {}),
-          });
-
-      const { data, error: oauthError } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo,
-          skipBrowserRedirect: true,
-        },
-      });
-
-      if (oauthError) throw oauthError;
-
-      if (data?.url && !isWeb) {
-        const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
-
-        if (result.type === 'success' && result.url) {
-          const { error: sessionError } = await completeSupabaseSessionFromUrl(result.url);
-          if (sessionError) setError(sessionError.message);
-        } else {
-          const { data: sessionData } = await supabase.auth.getSession();
-          if (!sessionData.session) {
-            if (result.type === 'cancel') {
-              setError('Giriş iptal edildi.');
-            } else if (result.type === 'dismiss') {
-              setError('Google girişi tamamlanamadı. Tekrar deneyin.');
-            }
-          }
-        }
-      } else if (isWeb && data?.url) {
-        window.location.href = data.url;
+      const result = await signInWithGoogle();
+      if (!result.ok && !result.cancelled) {
+        setError(result.message);
       }
     } catch (e: any) {
       setError(e.message ?? 'Google ile giriş başarısız.');
     } finally {
-      setGoogleLoading(false);
+      if (Platform.OS !== 'web') {
+        setGoogleLoading(false);
+      }
     }
   };
 
@@ -165,10 +130,15 @@ export default function LoginScreen() {
           }
         </Pressable>
 
-        {__DEV__ && Platform.OS !== 'web' && (
+        {__DEV__ && (
           <View className="mb-6 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
             <Text className="text-xs text-amber-700 text-center leading-relaxed">
-              <Text className="font-bold">Geliştirme modu:</Text> Google girişi için Supabase Redirect URLs listesine Expo proxy adresini ekleyin.
+              <Text className="font-bold">OAuth (mobil):</Text>{'\n'}
+              Supabase Redirect URLs →{'\n'}
+              https://agoragoakademisi.com/auth/mobile-callback{'\n'}
+              https://agoragoakademisi.com/**{'\n\n'}
+              <Text className="font-bold">Şu anki redirectTo:</Text>{'\n'}
+              {getAuthRedirectUri()}
             </Text>
           </View>
         )}
