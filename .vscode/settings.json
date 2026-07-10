@@ -3,5 +3,8 @@
     "source.fixAll": "explicit",
     "source.organizeImports": "explicit",
     "source.sortMembers": "explicit"
-  }
+  },
+  "javascript.validate.enable": false,
+  "typescript.validate.enable": true,
+  "js/ts.implicitProjectConfig.checkJs": false
 }
