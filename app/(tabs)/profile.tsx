@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, Pressable, ScrollView, ActivityIndicator, TouchableOpacity, Platform } from 'react-native';
+import { View, Text, Pressable, ScrollView, ActivityIndicator, TouchableOpacity, Platform, Switch } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../src/lib/supabase';
 import { useAuth } from '../../src/context/AuthContext';
 import { useOnboarding } from '../../src/context/OnboardingContext';
+import { useSettings, type ThemeMode } from '../../src/context/SettingsContext';
 import { GrowthJourneyShowcase } from '../../src/components/Profile/GrowthJourneyShowcase';
 import { Sparkles } from 'lucide-react-native';
 import {
@@ -146,30 +147,30 @@ export default function ProfileScreen() {
   if (!user) {
     return (
       <View
-        className="flex-1 bg-neutral-50  px-6"
+        className="flex-1 bg-neutral-50 dark:bg-dark-bg px-6"
         style={{ paddingTop: insets.top + 24 }}>
-        <Text className="text-3xl font-bold tracking-tight text-neutral-900  mb-2">Profilim</Text>
-        <Text className="text-neutral-500  mb-8">
+        <Text className="text-3xl font-bold tracking-tight text-neutral-900 dark:text-slate-100 mb-2">Profilim</Text>
+        <Text className="text-neutral-500 dark:text-slate-400 mb-8">
           İlerlemenizi kaydetmek, gelişiminizi görmek ve özel anketinizi tamamlamak için giriş yapın.
         </Text>
         
         <Pressable
           onPress={handleGoogleSignIn}
           disabled={googleLoading}
-          className="w-full flex-row items-center justify-center gap-2 rounded-2xl border border-neutral-200  bg-white  py-4 active:opacity-80 mb-4">
+          className="w-full flex-row items-center justify-center gap-2 rounded-2xl border border-neutral-200 dark:border-dark-border bg-white dark:bg-dark-card py-4 active:opacity-80 mb-4">
           {googleLoading ? (
             <ActivityIndicator color="#3b82f6" />
           ) : (
             <>
               <Ionicons name="logo-google" size={20} color="#3b82f6" />
-              <Text className="text-base font-semibold text-neutral-800 ">Google ile Devam Et</Text>
+              <Text className="text-base font-semibold text-neutral-800 dark:text-slate-100">Google ile Devam Et</Text>
             </>
           )}
         </Pressable>
         <Pressable
           onPress={() => router.push('/(auth)')}
-          className="w-full rounded-2xl bg-neutral-900  py-4 items-center active:opacity-80">
-          <Text className="text-base font-semibold text-white ">E-posta ile Giriş Yap</Text>
+          className="w-full rounded-2xl bg-neutral-900 dark:bg-accent-blue py-4 items-center active:opacity-80">
+          <Text className="text-base font-semibold text-white">E-posta ile Giriş Yap</Text>
         </Pressable>
       </View>
     );
@@ -179,31 +180,31 @@ export default function ProfileScreen() {
   if (!hasCompletedOnboarding) {
      return (
         <View
-          className="flex-1 bg-neutral-50  px-6"
+          className="flex-1 bg-neutral-50 dark:bg-dark-bg px-6"
           style={{ paddingTop: insets.top + 24 }}>
-          <Text className="text-3xl font-bold tracking-tight text-neutral-900  mb-2">Kurulum</Text>
-          <Text className="text-neutral-500  mb-8">
+          <Text className="text-3xl font-bold tracking-tight text-neutral-900 dark:text-slate-100 mb-2">Kurulum</Text>
+          <Text className="text-neutral-500 dark:text-slate-400 mb-8">
             Profilinizi ve gelişim planınızı oluşturmak için başlangıç anketini tamamlayın.
           </Text>
-          <View className="rounded-3xl border border-primary-blue/20 bg-primary-blue/5 p-6 mb-8 items-center text-center">
-             <View className="h-16 w-16 items-center justify-center rounded-full bg-primary-blue/20 mb-4">
+          <View className="rounded-3xl border border-primary-blue/20 dark:border-accent-blue/30 bg-primary-blue/5 dark:bg-accent-blue/10 p-6 mb-8 items-center">
+             <View className="h-16 w-16 items-center justify-center rounded-full bg-primary-blue/20 dark:bg-accent-blue/20 mb-4">
                 <Sparkles size={32} color="#0ea5e9" />
              </View>
-             <Text className="text-lg font-bold text-slate-900  text-center mb-2">Başlangıç Anketi</Text>
-             <Text className="text-sm text-slate-500  text-center mb-6">
+             <Text className="text-lg font-bold text-slate-900 dark:text-slate-100 text-center mb-2">Başlangıç Anketi</Text>
+             <Text className="text-sm text-slate-500 dark:text-slate-400 text-center mb-6">
                 Size uygun içerik ve seviyeyi belirlememiz için bu kısa anketi tamamlamanız gerekiyor. Sadece 1 dakikanızı alacak.
              </Text>
              <TouchableOpacity
                onPress={() => router.push('/onboarding')}
-               className="w-full rounded-2xl bg-primary-blue py-4 items-center mt-2 focus:opacity-80 active:opacity-80">
+               className="w-full rounded-2xl bg-primary-blue dark:bg-accent-blue py-4 items-center mt-2 active:opacity-80">
                <Text className="text-base font-bold text-white uppercase tracking-wider">Hemen Başla</Text>
              </TouchableOpacity>
           </View>
           <View className="flex-1 justify-end pb-8">
             <Pressable
               onPress={onSignOut}
-              className="w-full rounded-2xl border border-red-200  bg-red-50  py-4 items-center active:opacity-80">
-              <Text className="text-base font-semibold text-red-600 ">Çıkış Yap</Text>
+              className="w-full rounded-2xl border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-900/20 py-4 items-center active:opacity-80">
+              <Text className="text-base font-semibold text-red-600 dark:text-red-400">Çıkış Yap</Text>
             </Pressable>
           </View>
         </View>
@@ -217,16 +218,16 @@ export default function ProfileScreen() {
   // Oturum açmış ve anket tamamlanmış
   return (
     <ScrollView
-      className="flex-1 bg-neutral-50  px-6"
+      className="flex-1 bg-neutral-50 dark:bg-dark-bg px-6"
       contentContainerStyle={{ paddingTop: insets.top + 24, paddingBottom: 40 }}
       showsVerticalScrollIndicator={false}
       >
       <View className="mb-8">
-        <Text className="text-3xl font-bold tracking-tight text-neutral-900 ">Merhaba,</Text>
-        <Text className="text-primary-blue text-3xl font-extrabold tracking-tight mb-2">
+        <Text className="text-3xl font-bold tracking-tight text-neutral-900 dark:text-slate-100">Merhaba,</Text>
+        <Text className="text-primary-blue dark:text-accent-blue text-3xl font-extrabold tracking-tight mb-2">
            {displayTitle}
         </Text>
-        <Text className="text-neutral-500 ">{user.email}</Text>
+        <Text className="text-neutral-500 dark:text-slate-400">{user.email}</Text>
       </View>
 
       <GrowthJourneyShowcase
@@ -243,11 +244,13 @@ export default function ProfileScreen() {
 
       <AtolyeProgressChart progress={atolyeProgress} />
 
-      <View className="mt-8 pt-8 border-t border-slate-200 ">
+      <SettingsSection />
+
+      <View className="mt-6 pt-6 border-t border-slate-200 dark:border-dark-border">
         <Pressable
           onPress={onSignOut}
-          className="w-full rounded-2xl border border-red-200  bg-red-50  py-4 items-center active:opacity-80">
-          <Text className="text-base font-semibold text-red-600 ">Çıkış Yap</Text>
+          className="w-full rounded-2xl border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-900/20 py-4 items-center active:opacity-80">
+          <Text className="text-base font-semibold text-red-600 dark:text-red-400">Çıkış Yap</Text>
         </Pressable>
       </View>
     </ScrollView>
@@ -288,24 +291,24 @@ function AtolyeProgressChart({ progress }: { progress: AtolyeProgressSummary[] }
   const overallPct = totals.total ? Math.round((totals.completed / totals.total) * 100) : 0;
 
   return (
-    <View className="mt-8 rounded-3xl border border-slate-200 bg-white p-5">
+    <View className="mt-8 rounded-3xl border border-slate-200 dark:border-dark-border bg-white dark:bg-dark-card p-5">
       <View className="mb-5 flex-row items-end justify-between gap-3">
         <View className="flex-1">
-          <Text className="text-[11px] font-extrabold uppercase tracking-widest text-primary-blue">
+          <Text className="text-[11px] font-extrabold uppercase tracking-widest text-primary-blue dark:text-accent-blue">
             Atölye İlerlemesi
           </Text>
-          <Text className="mt-1 text-xl font-extrabold text-slate-900">
+          <Text className="mt-1 text-xl font-extrabold text-slate-900 dark:text-slate-100">
             Ders tamamlama grafiği
           </Text>
         </View>
-        <Text className="text-sm font-bold text-slate-500">
+        <Text className="text-sm font-bold text-slate-500 dark:text-slate-400">
           %{overallPct} · {totals.completed}/{totals.total}
         </Text>
       </View>
 
       {progress.length === 0 ? (
-        <View className="rounded-2xl border border-dashed border-slate-200 px-4 py-6">
-          <Text className="text-center text-sm text-slate-500">
+        <View className="rounded-2xl border border-dashed border-slate-200 dark:border-dark-border px-4 py-6">
+          <Text className="text-center text-sm text-slate-500 dark:text-slate-400">
             Henüz tamamlanmış Atölye dersi yok.
           </Text>
         </View>
@@ -314,16 +317,16 @@ function AtolyeProgressChart({ progress }: { progress: AtolyeProgressSummary[] }
           {progress.map((item) => (
             <View key={item.id}>
               <View className="mb-1.5 flex-row items-center justify-between gap-3">
-                <Text className="flex-1 text-sm font-bold text-slate-700" numberOfLines={1}>
+                <Text className="flex-1 text-sm font-bold text-slate-700 dark:text-slate-200" numberOfLines={1}>
                   {item.title}
                 </Text>
-                <Text className="text-xs font-bold text-slate-500">
+                <Text className="text-xs font-bold text-slate-500 dark:text-slate-400">
                   %{item.pct} · {item.completed}/{item.total}
                 </Text>
               </View>
-              <View className="h-2.5 overflow-hidden rounded-full bg-slate-100">
+              <View className="h-2.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-700">
                 <View
-                  className="h-full rounded-full bg-primary-blue"
+                  className="h-full rounded-full bg-primary-blue dark:bg-accent-blue"
                   style={{ width: `${Math.max(item.pct, item.completed > 0 ? 4 : 0)}%` }}
                 />
               </View>
@@ -334,3 +337,102 @@ function AtolyeProgressChart({ progress }: { progress: AtolyeProgressSummary[] }
     </View>
   );
 }
+
+function SettingsSection() {
+  const { themeMode, notificationsEnabled, setThemeMode, setNotificationsEnabled } = useSettings();
+
+  const THEME_OPTIONS: { label: string; value: ThemeMode; icon: string }[] = [
+    { label: 'Açık', value: 'light', icon: 'sunny-outline' },
+    { label: 'Koyu', value: 'dark', icon: 'moon-outline' },
+    { label: 'Sistem', value: 'system', icon: 'phone-portrait-outline' },
+  ];
+
+  return (
+    <View className="mt-8 rounded-3xl border border-slate-200 dark:border-dark-border bg-white dark:bg-dark-card p-5">
+      {/* Başlık */}
+      <Text className="mb-1 text-[11px] font-extrabold uppercase tracking-widest text-primary-blue dark:text-accent-blue">
+        Uygulama
+      </Text>
+      <Text className="mb-5 text-xl font-extrabold text-slate-900 dark:text-slate-100">Ayarlar &amp; Tercihler</Text>
+
+      {/* ─── Tema ─── */}
+      <View className="mb-5">
+        <View className="mb-3 flex-row items-center gap-2">
+          <Ionicons name="color-palette-outline" size={16} color="#64748b" />
+          <Text className="text-sm font-bold text-slate-700 dark:text-slate-300">Tema</Text>
+        </View>
+
+        {/* Segment butonlar */}
+        <View
+          className="flex-row rounded-2xl overflow-hidden"
+          style={{
+            backgroundColor: themeMode === 'dark' ? '#1e293b' : '#f1f5f9',
+            borderWidth: 1,
+            borderColor: themeMode === 'dark' ? '#334155' : '#e2e8f0',
+          }}
+        >
+          {THEME_OPTIONS.map((opt, idx) => {
+            const isActive = themeMode === opt.value;
+            return (
+              <Pressable
+                key={opt.value}
+                onPress={() => setThemeMode(opt.value)}
+                className="flex-1 items-center justify-center py-3 gap-1 active:opacity-80"
+                style={{
+                  backgroundColor: isActive ? '#1d4ed8' : 'transparent',
+                  borderRightWidth: idx < THEME_OPTIONS.length - 1 ? 1 : 0,
+                  borderRightColor: themeMode === 'dark' ? '#334155' : '#e2e8f0',
+                }}
+              >
+                <Ionicons
+                  name={opt.icon as any}
+                  size={18}
+                  color={isActive ? '#ffffff' : '#64748b'}
+                />
+                <Text
+                  className="text-xs font-bold"
+                  style={{ color: isActive ? '#ffffff' : '#64748b' }}
+                >
+                  {opt.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
+
+      {/* ─── Separator ─── */}
+      <View className="mb-5 h-px bg-slate-100 dark:bg-slate-700" />
+
+      {/* ─── Bildirimler ─── */}
+      <View className="flex-row items-center justify-between">
+        <View className="flex-row items-center gap-2 flex-1">
+          <View
+            className="h-9 w-9 items-center justify-center rounded-xl"
+            style={{ backgroundColor: notificationsEnabled ? '#eff6ff' : '#f8fafc' }}
+          >
+            <Ionicons
+              name={notificationsEnabled ? 'notifications' : 'notifications-off-outline'}
+              size={18}
+              color={notificationsEnabled ? '#1d4ed8' : '#94a3b8'}
+            />
+          </View>
+          <View>
+            <Text className="text-sm font-bold text-slate-700 dark:text-slate-200">Bildirimler</Text>
+            <Text className="text-xs text-slate-400 dark:text-slate-500">
+              {notificationsEnabled ? 'Açık — push bildirimleri etkin' : 'Kapalı'}
+            </Text>
+          </View>
+        </View>
+        <Switch
+          value={notificationsEnabled}
+          onValueChange={setNotificationsEnabled}
+          trackColor={{ false: '#e2e8f0', true: '#bfdbfe' }}
+          thumbColor={notificationsEnabled ? '#1d4ed8' : '#94a3b8'}
+        />
+      </View>
+    </View>
+  );
+}
+
+

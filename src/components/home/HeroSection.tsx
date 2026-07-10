@@ -21,34 +21,26 @@ export function HeroSection() {
 
   React.useEffect(() => {
     let active = true;
-
     fetchActiveSeasonSettings()
-      .then((settings) => {
-        if (active) setSeasonSettings(settings);
-      })
-      .catch((error) => {
-        console.warn('Sezon ayarları yüklenemedi, yerel değerler kullanılıyor:', error);
-      });
-
-    return () => {
-      active = false;
-    };
+      .then((settings) => { if (active) setSeasonSettings(settings); })
+      .catch((error) => { console.warn('Sezon ayarları yüklenemedi, yerel değerler kullanılıyor:', error); });
+    return () => { active = false; };
   }, []);
 
   return (
     <View className="mb-10 mt-4 items-center">
-      <Text className="text-[36px] font-black text-ink leading-[42px] mb-3 text-center">
+      <Text className="text-[36px] font-black text-ink dark:text-slate-100 leading-[42px] mb-3 text-center">
         Çevrimiçi{"\n"}
         <Text className="text-accent-blue">Go Eğitim</Text>{"\n"}
         Platformu
       </Text>
-      <Text className="text-lg text-ink/70 font-medium leading-6 text-center px-4 mb-8">
+      <Text className="text-lg text-ink/70 dark:text-slate-400 font-medium leading-6 text-center px-4 mb-8">
         Sadece kuralları değil, hamlelerin ardındaki derinliği keşfedin.
       </Text>
 
       {/* Announcement Card */}
       <View
-        className="w-full rounded-[30px] bg-white p-6 border border-slate-200/50 mb-4"
+        className="w-full rounded-[30px] bg-white dark:bg-dark-card p-6 border border-slate-200/50 dark:border-dark-border mb-4"
         style={shadowStyle({ width: 0, height: 10 }, 30, 0.05, '#000', 8)}
       >
         <View className="self-start rounded-full bg-accent-blue/10 border border-accent-blue/20 px-4 py-1.5 mb-5 flex-row items-center">
@@ -58,7 +50,7 @@ export function HeroSection() {
           </Text>
         </View>
 
-        <Text className="text-2xl font-black text-ink leading-8 mb-6">
+        <Text className="text-2xl font-black text-ink dark:text-slate-100 leading-8 mb-6">
           {seasonSettings.heroTitle}
         </Text>
 
@@ -67,13 +59,13 @@ export function HeroSection() {
             <Pressable
               key={league.id}
               onPress={() => router.push(`/course-detail/${league.id}`)}
-              className={`flex-row items-center justify-between py-4 active:bg-gray-50/50 rounded-2xl px-2 ${index !== LEAGUES.length - 1 ? 'border-b border-slate-100' : ''}`}
+              className={`flex-row items-center justify-between py-4 active:bg-gray-50/50 dark:active:bg-slate-700/50 rounded-2xl px-2 ${index !== LEAGUES.length - 1 ? 'border-b border-slate-100 dark:border-dark-border' : ''}`}
             >
               <View>
-                <Text className="text-[17px] font-bold text-ink mb-1">{league.name}</Text>
-                <Text className="text-[13px] font-medium text-ink/50">{league.level}</Text>
+                <Text className="text-[17px] font-bold text-ink dark:text-slate-100 mb-1">{league.name}</Text>
+                <Text className="text-[13px] font-medium text-ink/50 dark:text-slate-500">{league.level}</Text>
               </View>
-              <View className="rounded-full bg-ink px-4 py-2">
+              <View className="rounded-full bg-ink dark:bg-accent-blue px-4 py-2">
                 <Text className="text-[11px] font-bold text-white">Kayıtlar Açık</Text>
               </View>
             </Pressable>

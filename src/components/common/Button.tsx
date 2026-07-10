@@ -25,16 +25,16 @@ export function Button({
 
   switch (variant) {
     case 'primary':
-      bgClass = 'bg-ink active:bg-primary-blue shadow-md';
+      bgClass = 'bg-ink dark:bg-accent-blue active:opacity-80 shadow-md';
       textClass = 'text-white';
       break;
     case 'secondary':
-      bgClass = 'bg-ice-white active:bg-gray-200 border border-slate-200';
-      textClass = 'text-ink';
+      bgClass = 'bg-ice-white dark:bg-dark-surface active:bg-gray-200 dark:active:bg-slate-700 border border-slate-200 dark:border-dark-border';
+      textClass = 'text-ink dark:text-slate-100';
       break;
     case 'outline':
-      bgClass = 'bg-transparent border border-gray-300 active:bg-gray-50';
-      textClass = 'text-gray-700';
+      bgClass = 'bg-transparent border border-gray-300 dark:border-slate-600 active:bg-gray-50 dark:active:bg-slate-800';
+      textClass = 'text-gray-700 dark:text-slate-300';
       break;
   }
 
@@ -42,7 +42,7 @@ export function Button({
     <Pressable
       onPress={onPress}
       disabled={loading}
-      className={`flex-row items-center justify-center rounded-full px-6 py-4 transition-all ${bgClass} ${loading ? 'opacity-70' : ''} ${className}`}
+      className={`flex-row items-center justify-center rounded-full px-6 py-4 ${bgClass} ${loading ? 'opacity-70' : ''} ${className}`}
     >
       {loading ? (
         <ActivityIndicator color={variant === 'primary' ? '#fff' : '#1A1A1A'} />

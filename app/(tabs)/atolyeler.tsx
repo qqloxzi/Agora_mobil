@@ -7,6 +7,7 @@
  */
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, type Href } from 'expo-router';
+import { useColorScheme } from 'nativewind';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -103,6 +104,7 @@ function CourseCard({
   rating,
   width,
   onPress,
+  dark,
 }: {
   course: Course;
   index: number;
@@ -110,17 +112,20 @@ function CourseCard({
   rating: { avg: number; count: number };
   width: number;
   onPress: () => void;
+  dark: boolean;
 }) {
   const { completed, total, pct } = courseProgress(course, completedIds);
   const levelLabel = LEVEL_LABELS[course.levelBand] ?? LEVEL_LABELS['17-12-kyu'];
   const duration = formatDuration(course.durationMinutes);
   const progressWidth = `${Math.max(pct, total > 0 ? 2 : 0)}%` as DimensionValue;
+  const dyn = dynamicStyles(dark);
 
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [
         styles.courseCard,
+        dyn.courseCard,
         { width },
         pressed && styles.pressed,
       ]}
@@ -140,21 +145,19 @@ function CourseCard({
       </View>
 
       <View style={styles.cardBody}>
-        <Text style={styles.courseTitle} numberOfLines={2}>
+        <Text style={[styles.courseTitle, dyn.courseTitle]} numberOfLines={2}>
           {course.title}
         </Text>
-        <Text style={styles.courseSummary} numberOfLines={2}>
+        <Text style={[styles.courseSummary, dyn.courseSummary]} numberOfLines={2}>
           {course.summary || course.description || '-'}
         </Text>
 
         <View style={styles.courseMetaRow}>
-          <Text style={styles.durationText}>{duration}</Text>
-          <Text style={styles.progressText}>
-            %{pct} · {completed}/{total}
-          </Text>
+          <Text style={[styles.durationText, dyn.durationText]}>{duration}</Text>
+          <Text style={styles.progressText}>%{pct} · {completed}/{total}</Text>
         </View>
 
-        <View style={styles.progressTrack}>
+        <View style={[styles.progressTrack, dyn.progressTrack]}>
           <View style={[styles.progressFill, { width: progressWidth }]} />
         </View>
 
@@ -175,6 +178,7 @@ function SectionBlock({
   globalIndex,
   cardWidth,
   onPressCourse,
+  dark,
 }: {
   section: (typeof ATOLYELER_SECTIONS)[0];
   courses: Course[];
@@ -183,20 +187,25 @@ function SectionBlock({
   globalIndex: number;
   cardWidth: number;
   onPressCourse: (course: Course) => void;
+  dark: boolean;
 }) {
   const accent = SECTION_ACCENTS[section.id] ?? SECTION_ACCENTS['temel-taslar']!;
+  const dyn = dynamicStyles(dark);
 
   return (
     <View style={styles.section}>
-      <View style={[styles.sectionHeader, { backgroundColor: accent.bg, borderColor: accent.border }]}>
-        <Text style={styles.sectionTitle}>{section.title}</Text>
-        <Text style={[styles.sectionSubtitle, { color: accent.text }]}>{section.subtitle}</Text>
-        <Text style={styles.sectionIntro}>{section.intro}</Text>
+      <View style={[styles.sectionHeader, dark
+        ? { backgroundColor: '#1e293b', borderColor: '#334155' }
+        : { backgroundColor: accent.bg, borderColor: accent.border }
+      ]}>
+        <Text style={[styles.sectionTitle, dyn.sectionTitle]}>{section.title}</Text>
+        <Text style={[styles.sectionSubtitle, { color: dark ? '#60a5fa' : accent.text }]}>{section.subtitle}</Text>
+        <Text style={[styles.sectionIntro, dyn.sectionIntro]}>{section.intro}</Text>
       </View>
 
       {courses.length === 0 ? (
-        <View style={styles.emptySection}>
-          <Text style={styles.emptySectionText}>Bu kategoride henüz atölye yok.</Text>
+        <View style={[styles.emptySection, dyn.emptySection]}>
+          <Text style={[styles.emptySectionText, dyn.emptySectionText]}>Bu kategoride henüz atölye yok.</Text>
         </View>
       ) : (
         <View style={styles.cardGrid}>
@@ -209,6 +218,7 @@ function SectionBlock({
               rating={ratings[`kursdetay-${course.slug || course.id}`] ?? { avg: 0, count: 0 }}
               width={cardWidth}
               onPress={() => onPressCourse(course)}
+              dark={dark}
             />
           ))}
         </View>
@@ -304,8 +314,12 @@ export default function AtolyelerScreen() {
     scrollRef.current?.scrollTo({ y: 230 + index * 420, animated: true });
   };
 
+  const { colorScheme } = useColorScheme();
+  const dark = colorScheme === 'dark';
+  const dyn = dynamicStyles(dark);
+
   return (
-    <View style={[styles.screen, { paddingTop: insets.top }]}>
+    <View style={[styles.screen, dyn.screen, { paddingTop: insets.top }]}>
       <ScrollView
         ref={scrollRef}
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 104 }]}
@@ -313,14 +327,14 @@ export default function AtolyelerScreen() {
         stickyHeaderIndices={loading || courses.length === 0 ? undefined : [1]}
       >
         <View style={styles.hero}>
-          <Text style={styles.heroTitle}>Go Atölyeleri</Text>
-          <Text style={styles.heroSubtitle}>
+          <Text style={[styles.heroTitle, dyn.heroTitle]}>Go Atölyeleri</Text>
+          <Text style={[styles.heroSubtitle, dyn.heroSubtitle]}>
             Seviyene uygun atölyeyi seç, makaleyi oku ve tahta alıştırmalarıyla pekiştir.
           </Text>
         </View>
 
         {!loading && courses.length > 0 ? (
-          <View style={styles.navWrap}>
+          <View style={[styles.navWrap, dyn.navWrap]}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.navContent}>
               {ATOLYELER_SECTIONS.map((section, index) => {
                 const count = coursesInLevelBand(courses, section.levelBand).length;
@@ -329,13 +343,13 @@ export default function AtolyelerScreen() {
                   <Pressable
                     key={section.id}
                     onPress={() => handlePressSection(section.id, index)}
-                    style={[styles.navPill, isActive && styles.navPillActive]}
+                    style={[styles.navPill, isActive && (dark ? dyn.navPillActive : styles.navPillActive)]}
                     accessibilityRole="button"
                   >
-                    <Text style={[styles.navPillText, isActive && styles.navPillTextActive]}>
+                    <Text style={[styles.navPillText, dyn.navPillText, isActive && styles.navPillTextActive]}>
                       {section.title}
                     </Text>
-                    <Text style={[styles.navPillCount, isActive && styles.navPillCountActive]}>
+                    <Text style={[styles.navPillCount, dyn.navPillCount, isActive && styles.navPillCountActive]}>
                       ({count})
                     </Text>
                   </Pressable>
@@ -350,12 +364,12 @@ export default function AtolyelerScreen() {
         {loading ? (
           <View style={styles.loadingBox}>
             <ActivityIndicator size="large" color="#2f6fed" />
-            <Text style={styles.loadingText}>Atölyeler yükleniyor…</Text>
+            <Text style={[styles.loadingText, dyn.loadingText]}>Atölyeler yükleniyor…</Text>
           </View>
         ) : courses.length === 0 ? (
-          <View style={styles.emptyBox}>
+          <View style={[styles.emptyBox, dyn.emptyBox]}>
             <Ionicons name="school-outline" size={42} color="#94a3b8" />
-            <Text style={styles.emptyBoxText}>Henüz atölye içeriği yok.</Text>
+            <Text style={[styles.emptyBoxText, dyn.emptyBoxText]}>Henüz atölye içeriği yok.</Text>
           </View>
         ) : (
           <View style={styles.sectionsWrap}>
@@ -375,6 +389,7 @@ export default function AtolyelerScreen() {
                   globalIndex={globalIndex}
                   cardWidth={cardWidth}
                   onPressCourse={handlePressCourse}
+                  dark={dark}
                 />
               );
             })}
@@ -383,6 +398,31 @@ export default function AtolyelerScreen() {
       </ScrollView>
     </View>
   );
+}
+
+// Koyu/açık moda göre dinamik renkler
+function dynamicStyles(dark: boolean) {
+  return {
+    screen:          { backgroundColor: dark ? '#0f172a' : '#f8fbff' },
+    heroTitle:       { color: dark ? '#f1f5f9' : '#0a2540' },
+    heroSubtitle:    { color: dark ? 'rgba(241,245,249,0.6)' : 'rgba(10,37,64,0.68)' },
+    navWrap:         { backgroundColor: dark ? 'rgba(30,41,59,0.97)' : 'rgba(255,255,255,0.94)', borderColor: dark ? '#334155' : 'rgba(148,163,184,0.35)' },
+    navPillActive:   { backgroundColor: '#3b82f6' },
+    navPillText:     { color: dark ? 'rgba(241,245,249,0.72)' : 'rgba(10,37,64,0.72)' },
+    navPillCount:    { color: dark ? 'rgba(241,245,249,0.42)' : 'rgba(10,37,64,0.42)' },
+    loadingText:     { color: dark ? 'rgba(241,245,249,0.55)' : 'rgba(10,37,64,0.55)' },
+    emptyBox:        { backgroundColor: dark ? 'rgba(30,41,59,0.7)' : 'rgba(255,255,255,0.7)', borderColor: dark ? '#334155' : 'rgba(10,37,64,0.18)' },
+    emptyBoxText:    { color: dark ? 'rgba(241,245,249,0.55)' : 'rgba(10,37,64,0.55)' },
+    sectionTitle:    { color: dark ? '#f1f5f9' : '#0f172a' },
+    sectionIntro:    { color: dark ? 'rgba(241,245,249,0.55)' : 'rgba(15,23,42,0.62)' },
+    emptySection:    { backgroundColor: dark ? 'rgba(30,41,59,0.55)' : 'rgba(255,255,255,0.55)', borderColor: dark ? '#334155' : 'rgba(10,37,64,0.16)' },
+    emptySectionText:{ color: dark ? 'rgba(241,245,249,0.48)' : 'rgba(10,37,64,0.48)' },
+    courseCard:      { backgroundColor: dark ? '#1e293b' : '#fff', borderColor: dark ? '#334155' : 'rgba(148,163,184,0.28)' },
+    courseTitle:     { color: dark ? '#f1f5f9' : '#0a2540' },
+    courseSummary:   { color: dark ? 'rgba(241,245,249,0.55)' : 'rgba(10,37,64,0.62)' },
+    durationText:    { color: dark ? 'rgba(241,245,249,0.48)' : 'rgba(10,37,64,0.48)' },
+    progressTrack:   { backgroundColor: dark ? '#334155' : '#e2e8f0' },
+  };
 }
 
 const styles = StyleSheet.create({

@@ -40,7 +40,7 @@ export default function FAQ() {
   };
 
   return (
-    <View className="py-12 bg-primary-blue rounded-3xl px-6 mb-10 overflow-hidden relative">
+    <View className="py-12 bg-primary-blue dark:bg-slate-900 rounded-3xl px-6 mb-10 overflow-hidden relative border border-transparent dark:border-slate-700">
       <View className="mb-10">
         <Text className="text-[10px] font-bold uppercase tracking-widest text-white/70 mb-2">
           Soru işaretlerin kalmasın
@@ -53,7 +53,7 @@ export default function FAQ() {
         </Text>
       </View>
 
-      <View className="bg-black/15 rounded-2xl border border-white/20 overflow-hidden">
+      <View className="bg-black/15 dark:bg-white/5 rounded-2xl border border-white/20 dark:border-white/10 overflow-hidden">
         {faqs.map((item, index) => {
           const isOpen = openId === item.id;
           return (
@@ -72,7 +72,7 @@ export default function FAQ() {
                   <Ionicons name={isOpen ? "chevron-up" : "chevron-down"} size={16} color="white" />
                 </View>
               </Pressable>
-              
+
               {isOpen && (
                 <View className="px-5 pb-5 pt-0">
                   <Text className="text-[14px] leading-relaxed text-white/80">
