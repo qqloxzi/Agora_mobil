@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -10,18 +10,32 @@ import {
   Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as WebBrowser from 'expo-web-browser';
 import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../src/lib/supabase';
+import { useAuth } from '../../src/context/AuthContext';
+import { signInWithGoogle } from '../../src/lib/googleSignIn';
 import { shadowStyle } from '../../src/lib/shadowStyle';
+
+WebBrowser.maybeCompleteAuthSession();
 
 export default function SignupScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { user } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      router.replace('/(tabs)');
+    }
+  }, [user, router]);
 
   const onSignUp = async () => {
     setSubmitting(true);
@@ -33,6 +47,24 @@ export default function SignupScreen() {
       setSuccess(true);
     }
     setSubmitting(false);
+  };
+
+  const onSignUpWithGoogle = async () => {
+    setGoogleLoading(true);
+    setError(null);
+
+    try {
+      const result = await signInWithGoogle();
+      if (!result.ok && !result.cancelled) {
+        setError(result.message);
+      }
+    } catch (e: any) {
+      setError(e.message ?? 'Google ile kayıt başarısız.');
+    } finally {
+      if (Platform.OS !== 'web') {
+        setGoogleLoading(false);
+      }
+    }
   };
 
   return (
@@ -85,7 +117,7 @@ export default function SignupScreen() {
           <Pressable
             onPress={onSignUp}
             disabled={submitting}
-            className="w-full rounded-xl bg-neutral-700 py-3.5 items-center active:opacity-90">
+            className="w-full rounded-xl bg-neutral-700 py-3.5 items-center active:opacity-90 mb-6">
             {submitting ? (
               <ActivityIndicator color="#fff" />
             ) : (
@@ -93,7 +125,27 @@ export default function SignupScreen() {
             )}
           </Pressable>
 
-          <Pressable onPress={() => router.back()} className="mt-4 py-2">
+          <View className="flex-row items-center gap-4 mb-6">
+            <View className="flex-1 h-px bg-gray-200" />
+            <Text className="text-sm text-gray-400">veya</Text>
+            <View className="flex-1 h-px bg-gray-200" />
+          </View>
+
+          <Pressable
+            onPress={onSignUpWithGoogle}
+            disabled={googleLoading}
+            className="w-full flex-row items-center justify-center gap-3 rounded-2xl border border-gray-200 bg-white py-4 mb-4 active:bg-gray-50">
+            {googleLoading ? (
+              <ActivityIndicator color="#3b82f6" />
+            ) : (
+              <>
+                <Ionicons name="logo-google" size={22} color="#ea4335" />
+                <Text className="text-base font-semibold text-gray-700">Google ile kaydol</Text>
+              </>
+            )}
+          </Pressable>
+
+          <Pressable onPress={() => router.back()} className="mt-2 py-2">
             <Text className="text-center text-sm font-medium text-blue-500">Giriş sayfasına dön</Text>
           </Pressable>
         </View>

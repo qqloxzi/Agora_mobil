@@ -8,6 +8,8 @@ import {
   TouchableOpacity,
   Platform,
   Switch,
+  Alert,
+  Linking,
   NativeSyntheticEvent,
   NativeScrollEvent,
 } from 'react-native';
@@ -34,6 +36,7 @@ import {
   fetchProfileOnboarding,
 } from '../../src/lib/profileOnboarding';
 import { signInWithGoogle } from '../../src/lib/googleSignIn';
+import { SOCIAL_LINKS } from '../../src/constants/socialLinks';
 
 type ProfileFields = {
   preferredName: string | null;
@@ -288,6 +291,8 @@ export default function ProfileScreen() {
           <Text className="text-sm font-semibold text-red-500 dark:text-red-400">Çıkış Yap</Text>
         </Pressable>
       </View>
+
+      <SocialLinksRow />
     </ScrollView>
   );
 }
@@ -480,6 +485,46 @@ const PLANS = [
     ],
   },
 ] as const;
+
+const SOCIAL_ITEMS: {
+  key: keyof typeof SOCIAL_LINKS;
+  label: string;
+  icon: keyof typeof Ionicons.glyphMap;
+}[] = [
+  { key: 'instagram', label: 'Instagram', icon: 'logo-instagram' },
+  { key: 'youtube', label: 'YouTube', icon: 'logo-youtube' },
+  { key: 'whatsapp', label: 'WhatsApp', icon: 'logo-whatsapp' },
+];
+
+function openSocialLink(url: string) {
+  const trimmed = url.trim();
+  if (!trimmed) {
+    Alert.alert('Yakında');
+    return;
+  }
+  void Linking.openURL(trimmed);
+}
+
+function SocialLinksRow() {
+  return (
+    <View className="mt-6 mb-2 items-center">
+      <View className="flex-row items-center justify-center gap-6">
+        {SOCIAL_ITEMS.map((item) => (
+          <Pressable
+            key={item.key}
+            onPress={() => openSocialLink(SOCIAL_LINKS[item.key])}
+            accessibilityRole="button"
+            accessibilityLabel={item.label}
+            hitSlop={8}
+            className="h-11 w-11 items-center justify-center rounded-full active:opacity-60"
+          >
+            <Ionicons name={item.icon} size={22} color="#64748b" />
+          </Pressable>
+        ))}
+      </View>
+    </View>
+  );
+}
 
 function PlansSection() {
   const [pageWidth, setPageWidth] = useState(0);

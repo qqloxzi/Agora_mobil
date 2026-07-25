@@ -10,7 +10,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../src/lib/supabase';
 import { useAuth } from '../../src/context/AuthContext';
 import { signInWithGoogle } from '../../src/lib/googleSignIn';
-import { getAuthRedirectUri } from '../../src/lib/authRedirect';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -129,17 +128,6 @@ export default function LoginScreen() {
               </>
           }
         </Pressable>
-
-        {__DEV__ && (
-          <View className="mb-6 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
-            <Text className="text-xs text-amber-700 text-center leading-relaxed">
-              <Text className="font-bold">OAuth redirectTo:</Text>{'\n'}
-              {getAuthRedirectUri()}{'\n\n'}
-              Supabase Redirect URLs: exp://** , agoramobil://auth/callback{'\n'}
-              Site URL /dashboard olmasın (yanlış redirect oraya düşer).
-            </Text>
-          </View>
-        )}
 
         <Pressable onPress={() => router.push('/(auth)/signup')} className="py-2 active:opacity-70">
           <Text className="text-center text-[15px] text-gray-500">

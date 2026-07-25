@@ -119,6 +119,70 @@ function nextTurnAfter(color: Color): Color {
   return color === 'black' ? 'white' : 'black';
 }
 
+/** Stone radius as a fraction of cell size (diameter ≈ 0.97× cell). */
+const STONE_RADIUS_CELL_RATIO = 0.485;
+/**
+ * Letter label fontSize ≈ ~0.68× cell (substantial vs stones, not oversized).
+ * Between prior 0.4 (tiny) and 0.9 (oversized); line-gap halo scales with fontSize.
+ */
+const LETTER_FONT_CELL_RATIO = 0.68;
+/** Half-gap around empty letters, relative to fontSize — scales with letter size. */
+const LETTER_LINE_GAP_FONT_RATIO = 0.55;
+
+function letterFontSize(cellSize: number): number {
+  return Math.max(9, cellSize * LETTER_FONT_CELL_RATIO);
+}
+
+/** Half-gap around empty-point letter labels so grid lines don't touch the glyph. */
+function letterLineGapHalf(cellSize: number): number {
+  return letterFontSize(cellSize) * LETTER_LINE_GAP_FONT_RATIO;
+}
+
+/**
+ * Draw a full board line as segments, leaving a clean halo at each gap center.
+ * `axis` is the varying coordinate ('x' for horizontal lines, 'y' for vertical).
+ */
+function gridLineSegments(
+  fixed: number,
+  start: number,
+  end: number,
+  gapCenters: number[],
+  gapHalf: number,
+  axis: 'x' | 'y',
+  stroke: string,
+  strokeWidth: number,
+  keyPrefix: string,
+): React.ReactNode[] {
+  const sorted = [...gapCenters].sort((a, b) => a - b);
+  const segments: React.ReactNode[] = [];
+  let cursor = start;
+  let seg = 0;
+  for (const c of sorted) {
+    const gapStart = c - gapHalf;
+    const gapEnd = c + gapHalf;
+    if (cursor < gapStart - 0.25) {
+      const props =
+        axis === 'y'
+          ? { x1: fixed, y1: cursor, x2: fixed, y2: gapStart }
+          : { x1: cursor, y1: fixed, x2: gapStart, y2: fixed };
+      segments.push(
+        <Line key={`${keyPrefix}-${seg++}`} {...props} stroke={stroke} strokeWidth={strokeWidth} />,
+      );
+    }
+    cursor = Math.max(cursor, gapEnd);
+  }
+  if (cursor < end - 0.25) {
+    const props =
+      axis === 'y'
+        ? { x1: fixed, y1: cursor, x2: fixed, y2: end }
+        : { x1: cursor, y1: fixed, x2: end, y2: fixed };
+    segments.push(
+      <Line key={`${keyPrefix}-${seg++}`} {...props} stroke={stroke} strokeWidth={strokeWidth} />,
+    );
+  }
+  return segments;
+}
+
 /* ═══════════════════════════════════════════════════════════════
    OYUN MOTORU — GoBoardReact.jsx ile birebir aynı mantık
 ═══════════════════════════════════════════════════════════════ */
@@ -595,6 +659,24 @@ export default function GoBoard({
   const stars = STAR_POINTS[size] ?? [];
   // currentNode'a göre etiketler (syncLabels mantığı) — problem.labels artık kullanılmıyor
   const labels = currentNodeLabels;
+  /** Empty intersections with letter labels — grid lines leave a halo here. */
+  const emptyLetterGaps = useMemo(() => {
+    const points: { x: number; y: number }[] = [];
+    for (let x = 0; x < size; x++) {
+      for (let y = 0; y < size; y++) {
+        const cell = labels[x]?.[y];
+        if (cell?.kind === 'letter' && !grid[x]?.[y]) {
+          points.push({ x, y });
+        }
+      }
+    }
+    return points;
+  }, [labels, grid, size]);
+  const emptyLetterGapKeys = useMemo(
+    () => new Set(emptyLetterGaps.map((p) => `${p.x},${p.y}`)),
+    [emptyLetterGaps],
+  );
+  const lineGapHalf = letterLineGapHalf(cellSize);
   const gradientSuffix = useMemo(() => `${problem?.id ?? 'board'}-${size}`.replace(/[^a-zA-Z0-9_-]/g, '-'), [problem?.id, size]);
   const woodId = `wood-${gradientSuffix}`;
   const blackStoneId = `blackStone-${gradientSuffix}`;
@@ -656,22 +738,31 @@ export default function GoBoard({
           {/* Gravity board look: warm SVG wood, no axis labels. */}
           <Rect x={0} y={0} width={W} height={W} fill={`url(#${woodId})`} rx={8} />
 
-          {/* Grid yatay + dikey çizgiler */}
+          {/* Grid yatay + dikey çizgiler — empty letter points interrupt the lines. */}
           {Array.from({ length: size }).map((_, i) => {
-            const { x: sx, y: sy } = intersectionXY(padding, cellSize, i, 0);
-            const { x: ex, y: ey } = intersectionXY(padding, cellSize, i, size - 1);
-            const { x: lx, y: ly } = intersectionXY(padding, cellSize, 0, i);
-            const { x: rx, y: ry } = intersectionXY(padding, cellSize, size - 1, i);
+            const { x: colX, y: topY } = intersectionXY(padding, cellSize, i, 0);
+            const { y: botY } = intersectionXY(padding, cellSize, i, size - 1);
+            const { x: leftX, y: rowY } = intersectionXY(padding, cellSize, 0, i);
+            const { x: rightX } = intersectionXY(padding, cellSize, size - 1, i);
+            const vertGaps = emptyLetterGaps
+              .filter((p) => p.x === i)
+              .map((p) => intersectionXY(padding, cellSize, p.x, p.y).y);
+            const horizGaps = emptyLetterGaps
+              .filter((p) => p.y === i)
+              .map((p) => intersectionXY(padding, cellSize, p.x, p.y).x);
+            const stroke = 'rgba(0,0,0,0.7)';
+            const sw = 0.7;
             return (
               <G key={i}>
-                <Line x1={sx} y1={sy} x2={ex} y2={ey} stroke="rgba(0,0,0,0.7)" strokeWidth={0.7} />
-                <Line x1={lx} y1={ly} x2={rx} y2={ry} stroke="rgba(0,0,0,0.7)" strokeWidth={0.7} />
+                {gridLineSegments(colX, topY, botY, vertGaps, lineGapHalf, 'y', stroke, sw, `v${i}`)}
+                {gridLineSegments(rowY, leftX, rightX, horizGaps, lineGapHalf, 'x', stroke, sw, `h${i}`)}
               </G>
             );
           })}
 
-          {/* Hoshi (star points) */}
+          {/* Hoshi (star points) — skip under empty letter labels */}
           {stars.map(([ix, iy]) => {
+            if (emptyLetterGapKeys.has(`${ix},${iy}`)) return null;
             const { x, y } = intersectionXY(padding, cellSize, ix, iy);
             return <Circle key={`h-${ix}-${iy}`} cx={x} cy={y} r={Math.max(2, Math.min(3.2, cellSize * 0.075))} fill="rgba(0,0,0,0.75)" />;
           })}
@@ -694,7 +785,7 @@ export default function GoBoard({
           {/* Taşlar */}
           {stones.map((s) => {
             const { x, y } = intersectionXY(padding, cellSize, s.x, s.y);
-            const r = cellSize * 0.485;
+            const r = cellSize * STONE_RADIUS_CELL_RATIO;
             const isLast = lastMove?.x === s.x && lastMove?.y === s.y;
             return (
               <G key={`${s.x}-${s.y}`}>
@@ -737,22 +828,11 @@ export default function GoBoard({
             const ink = stone?.color === 'black' ? '#fff' : '#111';
             if (cell.kind === 'letter') {
               const onEmpty = !stone;
-              const fontSize = Math.max(9, cellSize * 0.4);
-              const discR = cellSize * 0.3;
-              const letterFill = onEmpty ? COURSE_BRAND.primary : ink;
+              const fontSize = letterFontSize(cellSize);
+              // Empty: bold black on wood (grid already gapped). On stone: high-contrast ink.
+              const letterFill = onEmpty ? '#111111' : ink;
               return (
                 <G key={`lb-${x}-${y}`}>
-                  {/* Soft disc softens the grid cross without an opaque white blob. */}
-                  {onEmpty ? (
-                    <Circle
-                      cx={pt.x}
-                      cy={pt.y}
-                      r={discR}
-                      fill="rgba(255, 248, 235, 0.78)"
-                      stroke="rgba(10, 37, 64, 0.1)"
-                      strokeWidth={0.6}
-                    />
-                  ) : null}
                   <SvgText
                     x={pt.x}
                     y={pt.y + fontSize * 0.08}
@@ -761,9 +841,6 @@ export default function GoBoard({
                     fontSize={fontSize}
                     fontWeight="700"
                     fill={letterFill}
-                    {...(onEmpty
-                      ? { stroke: 'rgba(255, 248, 235, 0.55)', strokeWidth: 1.1 }
-                      : {})}
                   >
                     {cell.text}
                   </SvgText>
