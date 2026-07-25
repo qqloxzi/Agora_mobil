@@ -24,12 +24,23 @@ export default function InstructorProfileScreen() {
       </Pressable>
 
       <View className="bg-white rounded-3xl border border-gray-100 p-6">
-        <View className="w-28 h-28 rounded-full bg-primary-blue overflow-hidden mb-5">
-          <Image
-            source={instructor.avatar}
-            style={{ width: '100%', height: '100%' }}
-            resizeMode="cover"
-          />
+        <View className="w-28 h-28 rounded-full bg-primary-blue overflow-hidden mb-5 items-center justify-center">
+          {instructor.avatar ? (
+            <Image
+              source={instructor.avatar}
+              style={{ width: '100%', height: '100%' }}
+              resizeMode="cover"
+            />
+          ) : (
+            <Text className="text-3xl font-extrabold text-white">
+              {instructor.name
+                .split(/\s+/)
+                .filter(Boolean)
+                .slice(0, 2)
+                .map((part) => part[0]?.toLocaleUpperCase('tr-TR') ?? '')
+                .join('')}
+            </Text>
+          )}
         </View>
         <Text className="text-3xl font-extrabold text-gray-900">{instructor.name}</Text>
         <Text className="text-base font-bold text-blue-600 mt-1">{instructor.title}</Text>

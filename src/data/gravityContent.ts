@@ -10,7 +10,7 @@ export type InstructorProfile = {
   id: string;
   name: string;
   title: string;
-  avatar: ImageSourcePropType;
+  avatar?: ImageSourcePropType;
   location: string;
   email: string;
   about: string;
@@ -47,6 +47,15 @@ export const instructorsData: InstructorProfile[] = [
     email: 'ali@agorago.com',
     about: "2 yıllık Go deneyimiyle Ali, Goizm ve İyitego topluluklarında aktif rol almakta ve özellikle başlangıç seviyesindeki oyuncuların sağlam bir temel oluşturmasına odaklanmaktadır.",
     courses: [{ title: 'Temel Taşlar Ligi', slug: 'temel-taslar', level: '17-12 Kyu' }],
+  },
+  {
+    id: 'doganergezen',
+    name: 'Doğan Ergezen',
+    title: '3 Kyu',
+    location: 'İzmir, Türkiye',
+    email: 'dogan@agorago.com',
+    about: 'Yapay zeka mühendisi, Atölyeler ve tsumegoların oluşturulmasından sorumlu',
+    courses: [],
   },
 ];
 

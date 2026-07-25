@@ -1,5 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, Pressable, ScrollView, ActivityIndicator, TouchableOpacity, Platform, Switch } from 'react-native';
+import {
+  View,
+  Text,
+  Pressable,
+  ScrollView,
+  ActivityIndicator,
+  TouchableOpacity,
+  Platform,
+  Switch,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
+} from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -265,6 +276,9 @@ export default function ProfileScreen() {
       {/* ── Settings ── */}
       <SettingsSection />
 
+      {/* ── Planlar ── */}
+      <PlansSection />
+
       {/* ── Sign Out ── */}
       <View className="mt-4">
         <Pressable
@@ -410,6 +424,136 @@ function SettingsSection() {
           trackColor={{ false: '#e2e8f0', true: '#bfdbfe' }}
           thumbColor={notificationsEnabled ? '#1d4ed8' : '#94a3b8'}
         />
+      </View>
+    </View>
+  );
+}
+
+const PLANS = [
+  {
+    id: 'yalnizca-atolyeler',
+    name: 'Yalnızca atölyeler',
+    level: 'Tek seferlik erişim',
+    features: [
+      'Tüm atölye içeriklerine tek seferlik erişim',
+      'Kendi hızında ilerleme ve tahta üzeri alıştırmalar',
+      'Problem çözümü ve kısa ders metinleri',
+      'Lig ve mentörlük dahil değil',
+    ],
+  },
+  {
+    id: 'temel-taslar',
+    name: 'Temel Taşlar',
+    level: '17–12 Kyu · 6 haftalık paket',
+    features: [
+      'Atölye içeriklerine erişim',
+      '6 haftalık Temel Taşlar ligi (17–12 kyu)',
+      'Seviyeye özel teori dersleri',
+      'Haftalık oyun analizi',
+      'Başlangıç seviyesinde mentörlük desteği',
+    ],
+  },
+  {
+    id: 'gelisim',
+    name: 'Gelişim',
+    level: '11–6 Kyu · 6 haftalık paket',
+    features: [
+      'Atölye içeriklerine erişim',
+      '6 haftalık Gelişim ligi (11–6 kyu)',
+      'Orta seviye strateji ve teknik dersleri',
+      'Haftalık bireysel oyun analizi',
+      'Canlı ders kayıtlarına erişim',
+      'Düzenli mentörlük ve geri bildirim',
+    ],
+  },
+  {
+    id: 'aydinlanma',
+    name: 'Aydınlanma',
+    level: '5 Kyu – 1 Dan · 6 haftalık paket',
+    features: [
+      'Atölye içeriklerine tam erişim',
+      '6 haftalık Aydınlanma ligi (5 kyu – 1 dan)',
+      'İleri seviye teori ve derinlemesine incelemeler',
+      'Haftalık detaylı oyun analizi',
+      'Canlı dersler ve kayıt arşivi',
+      'Öncelikli mentörlük ve kişisel gelişim planı',
+    ],
+  },
+] as const;
+
+function PlansSection() {
+  const [pageWidth, setPageWidth] = useState(0);
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  const onScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    if (pageWidth <= 0) return;
+    const index = Math.round(e.nativeEvent.contentOffset.x / pageWidth);
+    setActiveIndex(Math.max(0, Math.min(index, PLANS.length - 1)));
+  };
+
+  return (
+    <View className="mt-3 rounded-2xl border border-slate-100 dark:border-dark-border bg-white dark:bg-dark-card p-4">
+      <Text className="mb-3 text-[10px] font-extrabold uppercase tracking-widest text-accent-blue">
+        Planlar
+      </Text>
+
+      <View
+        onLayout={(e) => setPageWidth(e.nativeEvent.layout.width)}
+        className="overflow-hidden"
+      >
+        {pageWidth > 0 ? (
+          <ScrollView
+            horizontal
+            pagingEnabled
+            decelerationRate="fast"
+            showsHorizontalScrollIndicator={false}
+            nestedScrollEnabled
+            onMomentumScrollEnd={onScrollEnd}
+            onScrollEndDrag={onScrollEnd}
+          >
+            {PLANS.map((plan) => (
+              <View key={plan.id} style={{ width: pageWidth }} className="pr-0">
+                <View className="flex-row items-start justify-between gap-3 mb-3">
+                  <View className="flex-1">
+                    <Text className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                      {plan.name}
+                    </Text>
+                    <Text className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">
+                      {plan.level}
+                    </Text>
+                  </View>
+                  <View className="rounded-full border border-slate-200 dark:border-dark-border bg-slate-50 dark:bg-slate-800 px-3 py-1.5">
+                    <Text className="text-[10px] font-bold text-slate-600 dark:text-slate-300">
+                      Satın al
+                    </Text>
+                  </View>
+                </View>
+
+                <View className="gap-2">
+                  {plan.features.map((feature) => (
+                    <View key={feature} className="flex-row items-start gap-2">
+                      <View className="mt-1.5 h-1.5 w-1.5 rounded-full bg-accent-blue" />
+                      <Text className="flex-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
+                        {feature}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            ))}
+          </ScrollView>
+        ) : null}
+      </View>
+
+      <View className="mt-4 flex-row items-center justify-center gap-1.5">
+        {PLANS.map((plan, index) => (
+          <View
+            key={plan.id}
+            className={`h-1.5 rounded-full ${
+              index === activeIndex ? 'w-4 bg-accent-blue' : 'w-1.5 bg-slate-200 dark:bg-slate-600'
+            }`}
+          />
+        ))}
       </View>
     </View>
   );

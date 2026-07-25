@@ -5,14 +5,27 @@ import { Image, Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { instructorsData, type InstructorProfile } from '../../src/data/gravityContent';
 
+function getInitials(name: string) {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toLocaleUpperCase('tr-TR') ?? '')
+    .join('');
+}
+
 function InstructorAvatar({ instructor }: { instructor: InstructorProfile }) {
   return (
-    <View className="w-16 h-16 rounded-full bg-primary-blue overflow-hidden">
-      <Image
-        source={instructor.avatar}
-        style={{ width: '100%', height: '100%' }}
-        resizeMode="cover"
-      />
+    <View className="w-16 h-16 rounded-full bg-primary-blue overflow-hidden items-center justify-center">
+      {instructor.avatar ? (
+        <Image
+          source={instructor.avatar}
+          style={{ width: '100%', height: '100%' }}
+          resizeMode="cover"
+        />
+      ) : (
+        <Text className="text-lg font-extrabold text-white">{getInitials(instructor.name)}</Text>
+      )}
     </View>
   );
 }

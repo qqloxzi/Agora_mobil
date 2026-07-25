@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="tr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Agora Go — Mobil giriş</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        margin: 0;
+        background: #f8fafc;
+        color: #0f172a;
+      }
+      .box {
+        text-align: center;
+        padding: 2rem;
+        max-width: 22rem;
+      }
+      a.btn {
+        display: inline-block;
+        margin-top: 1rem;
+        padding: 0.75rem 1.25rem;
+        background: #2563eb;
+        color: #fff;
+        text-decoration: none;
+        border-radius: 0.75rem;
+        font-weight: 600;
+      }
+      a.secondary {
+        color: #2563eb;
+        display: inline-block;
+        margin-top: 0.75rem;
+      }
+      .hint {
+        font-size: 0.85rem;
+        color: #64748b;
+        margin-top: 1rem;
+        line-height: 1.4;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="box">
+      <p id="msg">Uygulamaya yönlendiriliyorsunuz…</p>
+      <p id="fallback">
+        <a id="openLink" class="btn" href="#">Uygulamayı aç</a>
+      </p>
+      <p id="alt" hidden>
+        <a id="openLinkAlt" class="secondary" href="#">Alternatif bağlantı</a>
+      </p>
+      <p id="hint" class="hint" hidden></p>
+    </div>
+    <script>
+      (function () {
+        var DEFAULT_RETURN = 'agoramobil://auth/callback';
+        var STORAGE_KEY = 'agora_oauth_return_to';
+        var params = new URLSearchParams(window.location.search);
+        var hash = window.location.hash || '';
+        var returnTo = params.get('return_to') || '';
+
+        // Hash içinde return_to=... (yedek; PKCE genelde query kullanır)
+        if (!returnTo && hash) {
+          var hp = new URLSearchParams(hash.replace(/^#/, ''));
+          returnTo = hp.get('return_to') || '';
+          if (returnTo) {
+            hp.delete('return_to');
+            var rest = hp.toString();
+            hash = rest ? '#' + rest : '';
+          }
+        }
+
+        // Aynı Custom Tab oturumunda daha önce kaydedildiyse
+        try {
+          if (!returnTo) {
+            returnTo = sessionStorage.getItem(STORAGE_KEY) || '';
+          } else {
+            sessionStorage.setItem(STORAGE_KEY, returnTo);
+          }
+        } catch (e) {}
+
+        if (!returnTo) returnTo = DEFAULT_RETURN;
+
+        // return_to yalnızca bilinen app scheme'lerine izin ver (open redirect koruması)
+        var allowed =
+          returnTo.indexOf('agoramobil://') === 0 ||
+          returnTo.indexOf('exp://') === 0 ||
+          returnTo.indexOf('exps://') === 0;
+        if (!allowed) {
+          returnTo = DEFAULT_RETURN;
+        }
+
+        params.delete('return_to');
+        var qs = params.toString();
+        var joiner = returnTo.indexOf('?') >= 0 ? '&' : '?';
+        var target = returnTo + (qs ? joiner + qs : '') + hash;
+
+        /**
+         * Android Chrome Custom Tab sıkça JS location → custom scheme'i engeller.
+         * intent:// + Expo Go package ile ikinci bir hedef dene.
+         */
+        function toAndroidIntent(url, pkg) {
+          var m = String(url).match(/^([a-z][a-z0-9+.-]*):\/\/([^#]*)(#.*)?$/i);
+          if (!m) return null;
+          var scheme = m[1];
+          var path = m[2];
+          var h = m[3] || '';
+          var intent =
+            'intent://' +
+            path +
+            h +
+            '#Intent;scheme=' +
+            encodeURIComponent(scheme) +
+            ';';
+          if (pkg) intent += 'package=' + pkg + ';';
+          intent += 'end';
+          return intent;
+        }
+
+        var isExpo =
+          returnTo.indexOf('exp://') === 0 || returnTo.indexOf('exps://') === 0;
+        var intentUrl = toAndroidIntent(
+          target,
+          isExpo ? 'host.exp.exponent' : 'com.agoragoakademisi.app'
+        );
+
+        var msg = document.getElementById('msg');
+        var hint = document.getElementById('hint');
+        var openLink = document.getElementById('openLink');
+        var openLinkAlt = document.getElementById('openLinkAlt');
+        var alt = document.getElementById('alt');
+
+        openLink.href = target;
+        if (intentUrl) {
+          openLinkAlt.href = intentUrl;
+          alt.hidden = false;
+        }
+
+        function tryNavigate(url) {
+          if (!url) return;
+          try {
+            var a = document.createElement('a');
+            a.href = url;
+            a.rel = 'noreferrer';
+            a.style.display = 'none';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+          } catch (e1) {}
+          try {
+            window.location.href = url;
+          } catch (e2) {}
+        }
+
+        // 1) Custom scheme / exp://
+        tryNavigate(target);
+        // 2) Kısa süre sonra Android intent (Custom Tab engellerse)
+        if (intentUrl) {
+          setTimeout(function () {
+            tryNavigate(intentUrl);
+          }, 350);
+        }
+
+        setTimeout(function () {
+          msg.textContent =
+            'Otomatik yönlendirme çalışmadıysa aşağıdaki düğmeye dokunun.';
+          hint.hidden = false;
+          hint.textContent = isExpo
+            ? 'Expo Go açık olmalı. Hâlâ webde kalıyorsanız Supabase Redirect URLs listesine exp://** ekleyin.'
+            : 'Uygulama yüklü olmalı (agoramobil://).';
+        }, 800);
+      })();
+    </script>
+  </body>
+</html>

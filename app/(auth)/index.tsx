@@ -133,12 +133,10 @@ export default function LoginScreen() {
         {__DEV__ && (
           <View className="mb-6 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
             <Text className="text-xs text-amber-700 text-center leading-relaxed">
-              <Text className="font-bold">OAuth (mobil):</Text>{'\n'}
-              Supabase Redirect URLs →{'\n'}
-              https://agoragoakademisi.com/auth/mobile-callback{'\n'}
-              https://agoragoakademisi.com/**{'\n\n'}
-              <Text className="font-bold">Şu anki redirectTo:</Text>{'\n'}
-              {getAuthRedirectUri()}
+              <Text className="font-bold">OAuth redirectTo:</Text>{'\n'}
+              {getAuthRedirectUri()}{'\n\n'}
+              Supabase Redirect URLs: exp://** , agoramobil://auth/callback{'\n'}
+              Site URL /dashboard olmasın (yanlış redirect oraya düşer).
             </Text>
           </View>
         )}

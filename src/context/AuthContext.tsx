@@ -25,11 +25,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     AsyncStorage.removeItem(LEGACY_SESSION_KEY).catch(() => {});
 
-    supabase.auth.getSession().then(({ data }) => {
-      if (!mounted) return;
-      setUser(data.session?.user ?? null);
-      setLoading(false);
-    });
+    supabase.auth
+      .getSession()
+      .then(({ data }) => {
+        if (!mounted) return;
+        setUser(data.session?.user ?? null);
+        setLoading(false);
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setUser(null);
+        setLoading(false);
+      });
 
     const {
       data: { subscription },

@@ -40,42 +40,41 @@ export default function FAQ() {
   };
 
   return (
-    <View className="py-12 bg-primary-blue dark:bg-slate-900 rounded-3xl px-6 mb-10 overflow-hidden relative border border-transparent dark:border-slate-700">
-      <View className="mb-10">
-        <Text className="text-[10px] font-bold uppercase tracking-widest text-white/70 mb-2">
+    <View className="py-6 px-4 mb-4">
+      <View className="mb-4">
+        <Text className="text-[9px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-1">
           Soru işaretlerin kalmasın
         </Text>
-        <Text className="text-3xl font-black text-white leading-tight mb-4">
+        <Text className="text-lg font-extrabold text-primary-blue dark:text-slate-100 leading-tight">
           Sıkça sorulan sorular
-        </Text>
-        <Text className="text-[15px] font-medium text-white/80 leading-relaxed mb-6">
-          En çok merak edilen konuları kısaca topladık. Daha fazlası için her zaman bizimle iletişime geçebilirsin.
         </Text>
       </View>
 
-      <View className="bg-black/15 dark:bg-white/5 rounded-2xl border border-white/20 dark:border-white/10 overflow-hidden">
+      <View className="overflow-hidden rounded-xl border border-slate-200 dark:border-dark-border bg-white dark:bg-dark-card">
         {faqs.map((item, index) => {
           const isOpen = openId === item.id;
           return (
             <View
               key={item.id}
-              className={`${index > 0 ? 'border-t border-white/10' : ''}`}
+              className={`${index > 0 ? 'border-t border-slate-100 dark:border-dark-border' : ''}`}
             >
               <Pressable
                 onPress={() => toggle(item.id)}
-                className="flex-row items-center justify-between p-5"
+                className="flex-row items-center justify-between px-3.5 py-3"
               >
-                <Text className="flex-1 text-[15px] font-bold text-white mr-4">
+                <Text className="flex-1 text-[13px] font-semibold text-slate-700 dark:text-slate-200 mr-3">
                   {item.question}
                 </Text>
-                <View className="w-8 h-8 rounded-full bg-white/10 items-center justify-center border border-white/20">
-                  <Ionicons name={isOpen ? "chevron-up" : "chevron-down"} size={16} color="white" />
-                </View>
+                <Ionicons
+                  name={isOpen ? 'chevron-up' : 'chevron-down'}
+                  size={14}
+                  color="#94a3b8"
+                />
               </Pressable>
 
               {isOpen && (
-                <View className="px-5 pb-5 pt-0">
-                  <Text className="text-[14px] leading-relaxed text-white/80">
+                <View className="px-3.5 pb-3 pt-0">
+                  <Text className="text-[12px] leading-5 text-slate-500 dark:text-slate-400">
                     {item.answer}
                   </Text>
                 </View>

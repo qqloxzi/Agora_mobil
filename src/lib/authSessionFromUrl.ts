@@ -1,8 +1,18 @@
 import { supabase } from './supabase';
 
+function parseAuthCallbackUrl(url: string): URL {
+  // Custom scheme (agoramobil://…) bazı ortamlarda new URL ile sorun çıkarabilir.
+  try {
+    return new URL(url);
+  } catch {
+    const normalized = url.replace(/^([a-z][a-z0-9+.-]*):\/\//i, 'https://');
+    return new URL(normalized);
+  }
+}
+
 /** OAuth / magic-link callback URL → Supabase oturumu */
 export async function completeSupabaseSessionFromUrl(url: string) {
-  const parsed = new URL(url);
+  const parsed = parseAuthCallbackUrl(url);
   const code = parsed.searchParams.get('code');
   if (code) return supabase.auth.exchangeCodeForSession(code);
 
@@ -27,6 +37,7 @@ export function isAuthCallbackUrl(url: string) {
     url.includes('access_token') ||
     url.includes('refresh_token') ||
     url.includes('code=') ||
-    url.includes('auth/callback')
+    url.includes('auth/callback') ||
+    url.includes('mobile-callback')
   );
 }

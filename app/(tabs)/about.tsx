@@ -21,7 +21,7 @@ function InstructorCard({ instructor, cardWidth }: { instructor: InstructorProfi
       accessibilityRole="button"
     >
       <View
-        className="mb-6 overflow-hidden rounded-full bg-blue-50"
+        className="mb-6 overflow-hidden rounded-full bg-blue-50 items-center justify-center"
         style={{
           width: 176,
           height: 176,
@@ -29,11 +29,22 @@ function InstructorCard({ instructor, cardWidth }: { instructor: InstructorProfi
           borderColor: '#f8fbff',
         }}
       >
-        <Image
-          source={instructor.avatar}
-          style={{ width: '100%', height: '100%' }}
-          resizeMode="cover"
-        />
+        {instructor.avatar ? (
+          <Image
+            source={instructor.avatar}
+            style={{ width: '100%', height: '100%' }}
+            resizeMode="cover"
+          />
+        ) : (
+          <Text className="text-4xl font-extrabold text-primary-blue">
+            {instructor.name
+              .split(/\s+/)
+              .filter(Boolean)
+              .slice(0, 2)
+              .map((part) => part[0]?.toLocaleUpperCase('tr-TR') ?? '')
+              .join('')}
+          </Text>
+        )}
       </View>
 
       <View className="items-center">

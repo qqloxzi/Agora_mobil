@@ -1,8 +1,7 @@
 import * as WebBrowser from 'expo-web-browser';
-import * as Linking from 'expo-linking';
 import { Platform } from 'react-native';
 import { supabase } from './supabase';
-import { getNativeAppReturnUriForDebug } from './authRedirect';
+import { getAuthRedirectUri, getNativeAppReturnUri } from './authRedirect';
 import { completeSupabaseSessionFromUrl } from './authSessionFromUrl';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -12,17 +11,15 @@ export type GoogleSignInResult =
   | { ok: false; message: string; cancelled?: boolean };
 
 export async function signInWithGoogle(): Promise<GoogleSignInResult> {
-  // expo-linking ile platforma özgü dinamik deep link URL'si oluştur:
-  //   - Production APK/IPA  → agoramobil://auth/callback
-  //   - Expo Go (dev)       → exp://192.x.x.x:8081/--/auth/callback
-  //   - Web                 → https://<origin>/auth/callback
-  const redirectTo =
-    Platform.OS === 'web' && typeof window !== 'undefined'
-      ? `${window.location.origin.replace(/\/$/, '')}/auth/callback`
-      : Linking.createURL('/auth/callback');
+  // Mobil varsayılan: exp:// veya agoramobil:// (Supabase Redirect URLs wildcards).
+  // Köprü: yalnızca EXPO_PUBLIC_OAUTH_USE_BRIDGE=1 iken.
+  // Web: origin/auth/callback
+  const redirectTo = getAuthRedirectUri();
+  const appReturnUri = getNativeAppReturnUri();
 
   if (__DEV__) {
-    console.log('[Google OAuth] redirectTo (expo-linking):', redirectTo);
+    console.log('[Google OAuth] redirectTo:', redirectTo);
+    console.log('[Google OAuth] appReturnUri:', appReturnUri);
   }
 
   const { data, error: oauthError } = await supabase.auth.signInWithOAuth({
@@ -46,10 +43,10 @@ export async function signInWithGoogle(): Promise<GoogleSignInResult> {
     return { ok: true };
   }
 
-  const result = await WebBrowser.openAuthSessionAsync(
-    data.url,
-    getNativeAppReturnUriForDebug()
-  );
+  // Android: app scheme / exp:// gelene kadar Custom Tab açık kalır.
+  // iOS: ASWebAuthenticationSession redirectUrl ile kapanır.
+  // redirectTo ile appReturnUri aynı native URI olmalı (köprü modunda köprü → appReturnUri).
+  const result = await WebBrowser.openAuthSessionAsync(data.url, appReturnUri);
 
   if (result.type === 'success' && result.url) {
     const { error: sessionError } = await completeSupabaseSessionFromUrl(result.url);
@@ -59,18 +56,19 @@ export async function signInWithGoogle(): Promise<GoogleSignInResult> {
     return { ok: true };
   }
 
+  // Deep link handler / bridge ile session gelmiş olabilir
   const { data: sessionData } = await supabase.auth.getSession();
   if (sessionData.session) {
     return { ok: true };
   }
 
-  if (result.type === 'cancel') {
+  if (result.type === 'cancel' || result.type === 'dismiss') {
     return { ok: false, message: 'Giriş iptal edildi.', cancelled: true };
   }
 
   return {
     ok: false,
     message:
-      'Google girişi tamamlanamadı. Supabase Redirect URLs listesine uygulama adresini eklediğinizden emin olun.',
+      'Google girişi tamamlanamadı. Supabase Redirect URLs: exp://** ve agoramobil://auth/callback. Site URL /dashboard olmamalı.',
   };
 }
