@@ -91,11 +91,8 @@ export default function AboutScreen() {
       </View>
 
       <View className="mb-10 items-center">
-        <Text className="mb-2 text-sm font-extrabold uppercase tracking-widest text-blue-500">
+        <Text className="text-sm font-extrabold uppercase tracking-widest text-blue-500">
           Takımımız
-        </Text>
-        <Text className="text-center text-3xl font-extrabold tracking-tight text-primary-blue">
-          Eğitmenlerimiz
         </Text>
       </View>
 

@@ -469,10 +469,10 @@ const PLANS = [
   {
     id: 'aydinlanma',
     name: 'Aydınlanma',
-    level: '5 Kyu – 1 Dan · 6 haftalık paket',
+    level: '5–1 Kyu · 6 haftalık paket',
     features: [
       'Atölye içeriklerine tam erişim',
-      '6 haftalık Aydınlanma ligi (5 kyu – 1 dan)',
+      '6 haftalık Aydınlanma ligi (5–1 kyu)',
       'İleri seviye teori ve derinlemesine incelemeler',
       'Haftalık detaylı oyun analizi',
       'Canlı dersler ve kayıt arşivi',

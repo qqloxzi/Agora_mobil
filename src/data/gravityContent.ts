@@ -26,7 +26,7 @@ export const instructorsData: InstructorProfile[] = [
     location: 'İzmir, Türkiye',
     email: 'tugkan@agorago.com',
     about: 'Go alanında 15 yılı aşkın tecrübeye sahiptir ve Türkiye Go Milli Takımı oyuncusudur.',
-    courses: [{ title: 'Aydınlanma Ligi (Dan Seviyesi)', slug: 'aydinlanma', level: 'İleri Seviye (5 Kyu - 1 Dan)' }],
+    courses: [{ title: 'Aydınlanma Ligi', slug: 'aydinlanma', level: '5–1 Kyu' }],
   },
   {
     id: 'oguzerdogan',
@@ -36,7 +36,7 @@ export const instructorsData: InstructorProfile[] = [
     location: 'İzmir, Türkiye',
     email: 'oguz@agorago.com',
     about: "4 yıldır go oynuyor. Hem Goizm'de hem de İytego'da başkanlık yapmış ve hâlâ İytego'da aktif eğitimler veriyor.",
-    courses: [{ title: 'Gelişim Ligi', slug: 'gelisim', level: 'Orta Seviye (11-6 Kyu)' }],
+    courses: [{ title: 'Gelişim Ligi', slug: 'gelisim', level: '11–6 Kyu' }],
   },
   {
     id: 'alikarakaya',
@@ -46,7 +46,7 @@ export const instructorsData: InstructorProfile[] = [
     location: 'İzmir, Türkiye',
     email: 'ali@agorago.com',
     about: "2 yıllık Go deneyimiyle Ali, Goizm ve İyitego topluluklarında aktif rol almakta ve özellikle başlangıç seviyesindeki oyuncuların sağlam bir temel oluşturmasına odaklanmaktadır.",
-    courses: [{ title: 'Temel Taşlar Ligi', slug: 'temel-taslar', level: '17-12 Kyu' }],
+    courses: [{ title: 'Temel Taşlar Ligi', slug: 'temel-taslar', level: '17–12 Kyu' }],
   },
   {
     id: 'doganergezen',
@@ -107,7 +107,7 @@ export const leagueData: League[] = [
   {
     id: 1,
     name: 'Temel Taşlar Ligi',
-    sub: '17-12 Kyu',
+    sub: '17–12 Kyu',
     status: 'Ligler Başladı',
     players: ['Umut Persil', 'Kaan Gençalp', 'Muhammed Altın', 'Ali Karakaya'],
     results: [
@@ -122,7 +122,7 @@ export const leagueData: League[] = [
   {
     id: 2,
     name: 'Gelişim Ligi',
-    sub: '11-6 Kyu',
+    sub: '11–6 Kyu',
     status: 'Ligler Başladı',
     players: ['Murat Özbay', 'Umut Can Dumlupınar', 'Tufan Baran Ilıcalı', 'Samed Karapınar', 'Nesibe Şenveli', 'Güçlü Yılmaz', 'Hüseyin boyacı', 'Altay Didikoğlu'],
     results: [
@@ -137,7 +137,7 @@ export const leagueData: League[] = [
   {
     id: 3,
     name: 'Aydınlanma Ligi',
-    sub: '5 Kyu - 1 Dan',
+    sub: '5–1 Kyu',
     status: 'Ligler Başladı',
     players: ['Aren Denktaş', 'Doğan Ergezen', 'Bilge Göze', 'Semih Bilki'],
     results: [

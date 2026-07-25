@@ -36,9 +36,9 @@ export async function getLigCourses(): Promise<{ data: CourseListItem[]; error: 
 export function getKyuRangeLabel(level: string | null): string {
   if (!level) return 'Lig';
   const l = level.toLowerCase();
-  if (l.includes('temel') || l.includes('taş')) return '17 Kyu - 12 Kyu';
-  if (l.includes('gelişim')) return '11 Kyu - 6 Kyu';
-  if (l.includes('aydınlanma')) return '5 Kyu - 1 Dan';
+  if (l.includes('temel') || l.includes('taş')) return '17–12 Kyu';
+  if (l.includes('gelişim')) return '11–6 Kyu';
+  if (l.includes('aydınlanma')) return '5–1 Kyu';
   return level;
 }
 

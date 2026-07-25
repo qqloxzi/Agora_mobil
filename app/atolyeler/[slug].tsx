@@ -1,12 +1,8 @@
 /**
  * AtolyelerKurs — Agora Mobil
  *
- * Split-screen layout:
- *  - Üst yarı: tahta (ekran yüksekliğinin ~%45'i)
- *  - Alt yarı: sıra / hamle yorumu / ilerleme çubuğu + CTA
- *
- * Kullanıcı board ile etkileşime girerken açıklamayı görmek için
- * scroll yapmak zorunda kalmaz.
+ * Minimal solve layout: board + essential controls, one explanation line.
+ * Completion is quiet (header next button); no celebratory banners.
  */
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -21,6 +17,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import GoBoard from '../../src/components/GoBoard';
+import { COURSE_BRAND } from '../../src/components/courses';
 import {
   fetchCurriculum, findCourseBySlug, flattenLessonsForCourse,
   getNextLesson, type Course, type Lesson,
@@ -83,11 +80,11 @@ function SidebarMenu({
                   flexDirection: 'row', alignItems: 'center', gap: 10,
                   paddingHorizontal: 16, paddingVertical: 12,
                   borderRadius: 10,
-                  backgroundColor: isSelected ? '#eff6ff' : 'transparent',
+                  backgroundColor: isSelected ? COURSE_BRAND.accentSoft : 'transparent',
                 }}>
                 <View style={{
                   width: 22, height: 22, borderRadius: 11,
-                  backgroundColor: isDone ? '#3b82f6' : '#ffffff',
+                  backgroundColor: isDone ? COURSE_BRAND.accent : '#ffffff',
                   borderWidth: isDone ? 0 : 2,
                   borderColor: '#d1d5db',
                   alignItems: 'center', justifyContent: 'center',
@@ -100,7 +97,7 @@ function SidebarMenu({
                 <Text numberOfLines={2} style={{
                   flex: 1, fontSize: 13,
                   fontWeight: isSelected ? '700' : '500',
-                  color: isSelected ? '#1d4ed8' : isDone ? '#374151' : '#6b7280',
+                  color: isSelected ? COURSE_BRAND.accent : isDone ? '#374151' : '#6b7280',
                 }}>
                   {lesson.title}
                 </Text>
@@ -117,37 +114,33 @@ function SidebarMenu({
    LessonContent — split-screen: tahta (üst) + bilgi paneli (alt)
 ═══════════════════════════════════════════════════════════════ */
 function LessonContent({
-  lesson, completed, onSolved, onNext, hasNext, isLast,
+  lesson, completed, onSolved,
   progressIndex, progressTotal, onSolvedStateChange,
 }: {
   lesson: Lesson; completed: boolean;
-  onSolved: () => void; onNext: () => void;
-  hasNext: boolean; isLast: boolean;
+  onSolved: () => void;
   progressIndex: number; progressTotal: number;
   onSolvedStateChange?: (solved: boolean) => void;
 }) {
   const { width, height } = useWindowDimensions();
   const isShortScreen = height < 720;
-  const boardMaxByHeight = height * (isShortScreen ? 0.36 : 0.42);
-  const boardPx = Math.min(width - 32, boardMaxByHeight);
+  const boardMaxByHeight = height * (isShortScreen ? 0.48 : 0.54);
+  const boardPx = Math.min(width - 24, boardMaxByHeight);
 
-  const [solved, setSolved] = useState(completed);
   const [activeNodeInfo, setActiveNodeInfo] = useState<{
     x: number; y: number; color: string; comment: string | null;
   } | null>(null);
   const solvedOnceRef = useRef(false);
 
   useEffect(() => {
-    setSolved(completed);
     setActiveNodeInfo(null);
     solvedOnceRef.current = false;
     onSolvedStateChange?.(completed);
-  }, [lesson.id, completed]);
+  }, [lesson.id, completed, onSolvedStateChange]);
 
   const handleSolve = useCallback(() => {
     if (!solvedOnceRef.current) {
       solvedOnceRef.current = true;
-      setSolved(true);
       onSolved();
       onSolvedStateChange?.(true);
     }
@@ -162,20 +155,41 @@ function LessonContent({
 
   const initialTurn: 'black' | 'white' = lesson.problem?.turn === 'white' ? 'white' : 'black';
   const boardSize = lesson.problem?.size ?? 19;
-  const pct = progressTotal > 0 ? (progressIndex / progressTotal) * 100 : 0;
   const introText = getLessonIntroText(lesson);
+  const moveComment = cleanText(activeNodeInfo?.comment);
+  const moveLabel = activeNodeInfo
+    ? `${activeNodeInfo.color === 'white' ? 'Beyaz' : 'Siyah'} · ${formatCoord(activeNodeInfo.x, activeNodeInfo.y, boardSize)}`
+    : null;
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#f8f3ea' }}>
+    <View style={{ flex: 1, backgroundColor: '#f7f7f5' }}>
+      <View style={{ alignItems: 'center', paddingHorizontal: 12, paddingTop: isShortScreen ? 6 : 10 }}>
+        <View style={{
+          alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center',
+          justifyContent: 'space-between', marginBottom: 6, gap: 8,
+        }}>
+          <Text style={{ flex: 1, fontSize: 15, fontWeight: '700', color: COURSE_BRAND.ink }} numberOfLines={1}>
+            {lesson.title}
+          </Text>
+          <Text style={{
+            fontSize: 11, color: COURSE_BRAND.accent, fontWeight: '700',
+            backgroundColor: COURSE_BRAND.accentSoft, overflow: 'hidden',
+            paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8,
+          }}>
+            {progressIndex}/{progressTotal}
+          </Text>
+        </View>
 
-      {/* ── Üst: tahta ── */}
-      <View style={{ alignItems: 'center', paddingHorizontal: 14, paddingTop: isShortScreen ? 4 : 8 }}>
-        <Text
-          style={{ fontSize: 14, fontWeight: '900', color: '#1f2937', alignSelf: 'flex-start', marginBottom: isShortScreen ? 2 : 4 }}
-          numberOfLines={1}
-        >
-          {lesson.title}
-        </Text>
+        <View style={{ alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+          <View style={{
+            width: 10, height: 10, borderRadius: 5,
+            backgroundColor: initialTurn === 'black' ? COURSE_BRAND.ink : '#f5f0e8',
+            borderWidth: 1, borderColor: 'rgba(148,163,184,0.7)',
+          }} />
+          <Text style={{ fontSize: 12, color: COURSE_BRAND.muted, fontWeight: '500' }}>
+            {initialTurn === 'white' ? 'Beyaz oynar' : 'Siyah oynar'}
+          </Text>
+        </View>
 
         {lesson.problem && (
           <GoBoard
@@ -191,96 +205,47 @@ function LessonContent({
         )}
       </View>
 
-      {/* ── Alt: bilgi paneli — kalan alanı doldurur ── */}
       <ScrollView
-        style={{ flex: 1, marginTop: 8, borderTopWidth: 1, borderTopColor: '#eadfce' }}
-        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 24 }}
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 20 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Gravity LessonIntroBox equivalent */}
+        {/* Single explanation source (GoBoard status suppresses comments when onNodeChange is set) */}
         <View style={{
-          backgroundColor: 'rgba(255,250,240,0.94)', borderRadius: 16,
-          borderWidth: 1, borderColor: '#f1d19b', padding: 13, marginBottom: 10,
-          boxShadow: '0px 6px 16px rgba(146,64,14,0.06)',
+          borderRadius: 12,
+          borderWidth: 1,
+          borderColor: COURSE_BRAND.accentBorder,
+          backgroundColor: '#ffffff',
+          paddingHorizontal: 14,
+          paddingVertical: 12,
+          gap: 6,
         }}>
-          <Text style={{ fontSize: 10, fontWeight: '900', letterSpacing: 1.2, color: '#b45309', textTransform: 'uppercase', marginBottom: 4 }}>
-            Bu alıştırmada
-          </Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: introText ? 5 : 0 }}>
-            <View style={{
-              width: 13, height: 13, borderRadius: 7,
-              backgroundColor: initialTurn === 'black' ? '#1a1a1a' : '#f5f0e8',
-              borderWidth: 1, borderColor: '#94a3b8',
-            }} />
-            <Text style={{ fontSize: 13, fontWeight: '600', color: '#1e293b' }}>
-              {initialTurn === 'white' ? 'Beyaz oynar' : 'Siyah oynar'}
+          {introText && !activeNodeInfo ? (
+            <Text style={{ fontSize: 13, color: '#475569', lineHeight: 19 }}>
+              {introText}
             </Text>
-          </View>
-          {introText ? (
-            <Text style={{ fontSize: 12, color: '#475569', lineHeight: 18 }}>{introText}</Text>
+          ) : null}
+
+          {moveLabel ? (
+            <>
+              <Text style={{
+                fontSize: 11, fontWeight: '700', color: COURSE_BRAND.accent,
+                letterSpacing: 0.4, textTransform: 'uppercase',
+              }}>
+                {moveLabel}
+              </Text>
+              {moveComment ? (
+                <Text style={{ fontSize: 14, color: COURSE_BRAND.ink, lineHeight: 20, fontWeight: '500' }}>
+                  {moveComment}
+                </Text>
+              ) : null}
+            </>
+          ) : !introText ? (
+            <Text style={{ fontSize: 13, color: COURSE_BRAND.muted, lineHeight: 18 }}>
+              Hamle yaptıkça notlar burada görünür.
+            </Text>
           ) : null}
         </View>
-
-        {/* Aktif hamle yorumu — bigger card */}
-        <View style={{
-          backgroundColor: activeNodeInfo ? 'rgba(240,244,255,0.96)' : 'rgba(248,250,252,0.96)',
-          borderRadius: 16, borderWidth: 1,
-          borderColor: activeNodeInfo ? '#c7d2fe' : '#e2e8f0',
-          padding: 14, marginBottom: 10, minHeight: 80,
-          boxShadow: '0px 6px 16px rgba(15,23,42,0.05)',
-        }}>
-          {activeNodeInfo ? (
-            <>
-              <Text style={{ fontSize: 13, fontWeight: '700', color: '#1e293b', marginBottom: 5 }}>
-                {activeNodeInfo.color === 'white' ? 'Beyaz' : 'Siyah'} · {formatCoord(activeNodeInfo.x, activeNodeInfo.y, boardSize)}
-              </Text>
-              <Text style={{ fontSize: 13, color: '#334155', lineHeight: 20 }}>
-                {cleanText(activeNodeInfo.comment) || 'Bu hamle için kayıtlı açıklama yok.'}
-              </Text>
-            </>
-          ) : (
-            <Text style={{ fontSize: 13, color: '#64748b', lineHeight: 20 }}>
-              Başlangıç pozisyonu. Hamle yaptıkça notlar burada görünür.
-            </Text>
-          )}
-        </View>
-
-        {/* İlerleme çubuğu */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-          <View style={{ flex: 1, height: 5, backgroundColor: '#e2e8f0', borderRadius: 3, overflow: 'hidden' }}>
-            <View style={{ width: `${pct}%` as any, height: '100%', backgroundColor: '#3b82f6', borderRadius: 3 }} />
-          </View>
-          <Text style={{ fontSize: 11, color: '#6b7280', fontWeight: '600' }}>
-            {progressIndex} / {progressTotal}
-          </Text>
-        </View>
-
-        {/* Tebrik */}
-        {solved && (
-          <View style={{
-            backgroundColor: '#ecfdf5', borderRadius: 16,
-            borderWidth: 1, borderColor: '#6ee7b7',
-            padding: 13, flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8,
-            boxShadow: '0px 6px 16px rgba(16,185,129,0.10)',
-          }}>
-            <Ionicons name="checkmark-circle" size={26} color="#10b981" />
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontWeight: '700', color: '#065f46', fontSize: 14 }}>Tebrikler!</Text>
-              <Text style={{ color: '#047857', fontSize: 12, marginTop: 2 }}>Bu dersi tamamladınız.</Text>
-            </View>
-          </View>
-        )}
-        {/* Sonraki ders butonu header'a taşındı */}
-
-        {/* Kurs tamamlandı */}
-        {solved && isLast && (
-          <View style={{ backgroundColor: '#059669', borderRadius: 14, paddingVertical: 13, alignItems: 'center' }}>
-            <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>🎉 Kurs Tamamlandı!</Text>
-            <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 12, marginTop: 4 }}>
-              Bu müfredattaki son dersiniz. Tebrikler!
-            </Text>
-          </View>
-        )}
       </ScrollView>
     </View>
   );
@@ -319,7 +284,6 @@ export default function AtolyelerKursScreen() {
     () => (selectedLessonId ? getNextLesson(flatLessons, selectedLessonId) : null),
     [flatLessons, selectedLessonId]
   );
-  const isLast = flatLessons.length > 0 && flatLessons[flatLessons.length - 1]?.id === currentLesson?.id;
   const lessonIndex = flatLessons.findIndex((l) => l.id === selectedLessonId);
 
   /* Veri yükle */
@@ -395,7 +359,7 @@ export default function AtolyelerKursScreen() {
   if (loading) {
     return (
       <View style={{ flex: 1, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', paddingTop: insets.top }}>
-        <ActivityIndicator size="large" color="#1d4ed8" />
+        <ActivityIndicator size="large" color={COURSE_BRAND.accent} />
         <Text style={{ color: '#9ca3af', marginTop: 12 }}>İçerik yükleniyor…</Text>
       </View>
     );
@@ -407,7 +371,7 @@ export default function AtolyelerKursScreen() {
         <Ionicons name="alert-circle-outline" size={48} color="#d1d5db" />
         <Text style={{ color: '#9ca3af', marginTop: 12, textAlign: 'center' }}>Kurs bulunamadı.</Text>
         <Pressable onPress={() => router.back()}
-          style={{ marginTop: 16, paddingHorizontal: 24, paddingVertical: 12, backgroundColor: '#1d4ed8', borderRadius: 100 }}>
+          style={{ marginTop: 16, paddingHorizontal: 24, paddingVertical: 12, backgroundColor: COURSE_BRAND.primary, borderRadius: 100 }}>
           <Text style={{ color: '#fff', fontWeight: '700' }}>Geri Dön</Text>
         </Pressable>
       </View>
@@ -440,7 +404,7 @@ export default function AtolyelerKursScreen() {
         {/* Sonraki ders — sadece çözüldüğünde ve sonraki varsa */}
         {lessonSolved && Boolean(nextLesson) && (
           <Pressable onPress={handleNext}
-            style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: '#1d4ed8', alignItems: 'center', justifyContent: 'center' }}>
+            style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: COURSE_BRAND.accent, alignItems: 'center', justifyContent: 'center' }}>
             <Ionicons name="arrow-forward" size={17} color="#fff" />
           </Pressable>
         )}
@@ -457,9 +421,6 @@ export default function AtolyelerKursScreen() {
           lesson={currentLesson}
           completed={lessonCompleted}
           onSolved={handleSolved}
-          onNext={handleNext}
-          hasNext={Boolean(nextLesson)}
-          isLast={isLast}
           progressIndex={lessonIndex + 1}
           progressTotal={flatLessons.length}
           onSolvedStateChange={setLessonSolved}

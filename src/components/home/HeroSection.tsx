@@ -10,9 +10,9 @@ import {
 } from '../../data/seasonSettings';
 
 const LEAGUES = [
-  { id: 'temel-taslar', name: 'Temel Taşlar Ligi', level: '10 Kyu - 20 Kyu' },
-  { id: 'gelisim', name: 'Gelişim Ligi', level: '1 Kyu - 9 Kyu' },
-  { id: 'aydinlanma', name: 'Aydınlanma Ligi', level: 'Dan Seviyesi' },
+  { id: 'temel-taslar', name: 'Temel Taşlar Ligi', level: '17–12 Kyu' },
+  { id: 'gelisim', name: 'Gelişim Ligi', level: '11–6 Kyu' },
+  { id: 'aydinlanma', name: 'Aydınlanma Ligi', level: '5–1 Kyu' },
 ];
 
 export function HeroSection() {
@@ -29,16 +29,7 @@ export function HeroSection() {
 
   return (
     <View className="mb-10 mt-4 items-center">
-      <Text className="text-[36px] font-black text-ink dark:text-slate-100 leading-[42px] mb-3 text-center">
-        Çevrimiçi{"\n"}
-        <Text className="text-accent-blue">Go Eğitim</Text>{"\n"}
-        Platformu
-      </Text>
-      <Text className="text-lg text-ink/70 dark:text-slate-400 font-medium leading-6 text-center px-4 mb-8">
-        Sadece kuralları değil, hamlelerin ardındaki derinliği keşfedin.
-      </Text>
-
-      {/* Announcement Card */}
+      {/* Announcement Card — Yeni sezon duyurusu */}
       <View
         className="w-full rounded-[30px] bg-white dark:bg-dark-card p-6 border border-slate-200/50 dark:border-dark-border mb-4"
         style={shadowStyle({ width: 0, height: 10 }, 30, 0.05, '#000', 8)}

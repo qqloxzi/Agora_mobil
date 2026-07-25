@@ -111,11 +111,8 @@ export function AboutSection() {
       </View>
 
       <View className="mb-6 items-center">
-        <Text className="mb-2 text-sm font-extrabold uppercase tracking-widest text-blue-500 dark:text-accent-blue">
+        <Text className="text-sm font-extrabold uppercase tracking-widest text-blue-500 dark:text-accent-blue">
           Takımımız
-        </Text>
-        <Text className="text-center text-3xl font-extrabold tracking-tight text-primary-blue dark:text-slate-100">
-          Eğitmenlerimiz
         </Text>
       </View>
 

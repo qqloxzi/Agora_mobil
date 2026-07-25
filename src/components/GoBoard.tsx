@@ -7,6 +7,7 @@
  * Render: react-native-svg (Canvas API yok)
  * Geometri: goBoardLayout.js (aynı kaynak)
  */
+import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAudioPlayer } from 'expo-audio';
 import {
@@ -30,6 +31,7 @@ import Svg, {
   Ellipse,
   Polygon,
 } from 'react-native-svg';
+import { COURSE_BRAND } from './courses/courseTheme';
 import { computeBoardLayout, intersectionXY } from '../lib/goBoardLayout';
 import type { BoardLabelCell, GoProblem } from '../types/goProblem';
 
@@ -335,6 +337,13 @@ export default function GoBoard({
   const [pausePhase, setPausePhase] = useState<'beforeOpponent' | 'afterOpponent' | null>(null);
   const wrongTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  /* Parent (onNodeChange) already renders SGF comments — keep board status empty
+     for move outcomes so the same explanation is not shown twice. */
+  const statusForNode = useCallback((comment: unknown, fallback: string) => {
+    if (onNodeChange) return '';
+    return cleanNodeComment(comment) || fallback;
+  }, [onNodeChange]);
+
   // currentNode.labels'a göre etiketleri güncelle (Gravity syncLabels mantığı)
   const [currentNodeLabels, setCurrentNodeLabels] = useState<(BoardLabelCell | null)[][] >(() =>
     Array.from({ length: initState.currentNode?.labels ? size : size }, () => Array<BoardLabelCell | null>(size).fill(null))
@@ -407,13 +416,13 @@ export default function GoBoard({
       setPendingOpponent(null);
       // checkStatus: wrong veya doğru leaf node kontrolü
       if (oppNode.status === 'wrong') {
-        setStatusMsg(cleanNodeComment(oppNode.comment) || '❌ Yanlış hamle.');
+        setStatusMsg(statusForNode(oppNode.comment, 'Yanlış hamle.'));
         onSolve?.();
       } else if (oppNode.status === 'correct' || !oppNode.children?.length) {
         // Leaf node — doğru çözüm
         solvedRef.current = true;
         onSolve?.();
-        setStatusMsg(cleanNodeComment(oppNode.comment) || '✅ Doğru!');
+        setStatusMsg(statusForNode(oppNode.comment, 'Doğru.'));
       }
       // 'auto' modunda comment pause'u yok, stepAfter için koru
       if ((problem?.lessonPlayback ?? 'auto') === 'stepAfter' && oppNode.comment) {
@@ -421,7 +430,7 @@ export default function GoBoard({
       }
     }, OPPONENT_RESPONSE_DELAY_MS);
     return () => clearTimeout(timer);
-  }, [pendingOpponent, size, problem?.lessonPlayback, onSolve, playStoneSound]);
+  }, [pendingOpponent, size, problem?.lessonPlayback, onSolve, playStoneSound, statusForNode]);
 
   /* currentNode değişince comment + koordinat'i dışarı aktar */
   useEffect(() => {
@@ -473,8 +482,8 @@ export default function GoBoard({
     if (!result.ok) {
       const msgs: Record<string, string> = {
         occupied: '',
-        suicide: '⛔ Yasak Hamle',
-        ko: '🔄 Ko Kuralı!',
+        suicide: 'Yasak hamle',
+        ko: 'Ko kuralı',
       };
       if (result.reason !== 'occupied') setStatusMsg(msgs[result.reason!] ?? '');
       return;
@@ -499,7 +508,7 @@ export default function GoBoard({
 
         if (matched.status === 'wrong') {
           // Yanlış dal: rakibin cevabını da göster (isLeaf değilse)
-          setStatusMsg(cleanNodeComment(matched.comment) || '');
+          setStatusMsg(statusForNode(matched.comment, ''));
           if (!isLeaf && matched.children.length >= 1) {
             const playback = problem?.lessonPlayback ?? 'auto';
             if (playback === 'stepBefore') {
@@ -511,7 +520,7 @@ export default function GoBoard({
             }
           } else {
             // Yanlış leaf: hemen bildir
-            setStatusMsg(cleanNodeComment(matched.comment) || '❌ Yanlış hamle.');
+            setStatusMsg(statusForNode(matched.comment, 'Yanlış hamle.'));
             onSolve?.();
           }
           return;
@@ -520,7 +529,7 @@ export default function GoBoard({
         if ((matched.status === 'correct' && isLeaf) || (!matched.status && isLeaf)) {
           solvedRef.current = true;
           onSolve?.();
-          setStatusMsg(cleanNodeComment(matched.comment) || '✅ Doğru!');
+          setStatusMsg(statusForNode(matched.comment, 'Doğru.'));
           return;
         }
 
@@ -528,20 +537,22 @@ export default function GoBoard({
         if (!isLeaf && matched.children.length >= 1) {
           const playback = problem?.lessonPlayback ?? 'auto';
           if (playback === 'stepBefore') {
-            setStatusMsg(cleanNodeComment(matched.comment) || 'Devam ederek rakibin cevabını gör.');
+            setStatusMsg(statusForNode(matched.comment, 'Devam ederek rakibin cevabını gör.'));
             setPausePhase('beforeOpponent');
             setPendingOpponent({ node: matched.children[0], gridAfterUser: result.newGrid!, paused: true });
           } else {
+            // Comment lives in parent via onNodeChange; avoid duplicating it here.
+            setStatusMsg(statusForNode(matched.comment, ''));
             setPendingOpponent({ node: matched.children[0], gridAfterUser: result.newGrid! });
           }
         }
       } else if (children.length > 0) {
         setCurrentNode(null);
-        setStatusMsg('❌ Yanlış hamle — serbest devam edebilirsiniz.');
+        setStatusMsg('Yanlış hamle — serbest devam edebilirsiniz.');
         onSolve?.();
       }
     }
-  }, [readOnly, pausePhase, grid, turn, size, boardHistory, hitTest, problem, onSolve, onTurnChange, playStoneSound]);
+  }, [readOnly, pausePhase, grid, turn, size, boardHistory, hitTest, problem, onSolve, onTurnChange, playStoneSound, statusForNode, currentNode]);
 
   const handleResponderRelease = useCallback(
     (evt: GestureResponderEvent) => {
@@ -599,17 +610,19 @@ export default function GoBoard({
     }
   }, [currentNode]);
 
+  const tone = statusMsg ? statusTone(statusMsg) : 'info';
+
   return (
-    <View style={styles.boardShell}>
-      {/* Fixed status slot: prevents board jumping when feedback appears. */}
-      <View style={styles.statusSlot}>
+    <View style={[styles.boardShell, { width: W }]}>
+      {/* Status slot — collapses when empty to keep lesson UI compact. */}
+      <View style={[styles.statusSlot, statusMsg === '' && styles.statusSlotCollapsed]}>
         {statusMsg !== '' ? (
           <View
             style={[
               styles.statusBanner,
-              statusMsg.startsWith('✅')
+              tone === 'success'
                 ? styles.statusSuccess
-                : statusMsg.startsWith('❌')
+                : tone === 'error'
                   ? styles.statusError
                   : styles.statusInfo,
             ]}
@@ -671,8 +684,8 @@ export default function GoBoard({
                 cx={pt.x}
                 cy={pt.y}
                 r={cellSize * 0.32}
-                fill="rgba(16,185,129,0.18)"
-                stroke="#10b981"
+                fill="rgba(15,118,110,0.16)"
+                stroke={COURSE_BRAND.accentBright}
                 strokeWidth={2}
               />
             );
@@ -723,19 +736,38 @@ export default function GoBoard({
             const stone = grid[x]?.[y];
             const ink = stone?.color === 'black' ? '#fff' : '#111';
             if (cell.kind === 'letter') {
+              const onEmpty = !stone;
+              const fontSize = Math.max(9, cellSize * 0.4);
+              const discR = cellSize * 0.3;
+              const letterFill = onEmpty ? COURSE_BRAND.primary : ink;
               return (
-                <SvgText
-                  key={`lb-${x}-${y}`}
-                  x={pt.x}
-                  y={pt.y + cellSize * 0.02}
-                  textAnchor="middle"
-                  alignmentBaseline="middle"
-                  fontSize={cellSize * 0.58}
-                  fontWeight="800"
-                  fill={ink}
-                >
-                  {cell.text}
-                </SvgText>
+                <G key={`lb-${x}-${y}`}>
+                  {/* Soft disc softens the grid cross without an opaque white blob. */}
+                  {onEmpty ? (
+                    <Circle
+                      cx={pt.x}
+                      cy={pt.y}
+                      r={discR}
+                      fill="rgba(255, 248, 235, 0.78)"
+                      stroke="rgba(10, 37, 64, 0.1)"
+                      strokeWidth={0.6}
+                    />
+                  ) : null}
+                  <SvgText
+                    x={pt.x}
+                    y={pt.y + fontSize * 0.08}
+                    textAnchor="middle"
+                    alignmentBaseline="middle"
+                    fontSize={fontSize}
+                    fontWeight="700"
+                    fill={letterFill}
+                    {...(onEmpty
+                      ? { stroke: 'rgba(255, 248, 235, 0.55)', strokeWidth: 1.1 }
+                      : {})}
+                  >
+                    {cell.text}
+                  </SvgText>
+                </G>
               );
             }
             if (cell.kind === 'circle') {
@@ -768,40 +800,53 @@ export default function GoBoard({
         )}
       </View>
 
-      {/* Kontrol çubuğu */}
+      {/* Kontrol çubuğu — width locked to board so RN centers under the grid */}
       {!readOnly && (
         <View style={styles.controlsRow}>
-          {/* Sıra göstergesi — ders modunda gizlenir */}
           {!hideTurnIndicator && (
             <View style={styles.turnBadge}>
-              <View style={{
-                width: 16, height: 16, borderRadius: 8,
-                backgroundColor: turn === 'black' ? '#1a1a1a' : '#f5f0e8',
-                borderWidth: 1, borderColor: '#888',
-              }} />
+              <View style={[
+                styles.turnStone,
+                { backgroundColor: turn === 'black' ? COURSE_BRAND.ink : '#f5f0e8' },
+              ]} />
               <Text style={styles.turnText}>
                 {turn === 'black' ? 'Siyah' : 'Beyaz'} oynuyor
               </Text>
             </View>
           )}
-          {/* Gravity-style lesson board controls */}
           <View style={styles.controlGroup}>
-            <Pressable onPress={undo}
-              style={({ pressed }) => [styles.controlButton, pressed && styles.controlButtonPressed]}>
-              <Text style={styles.controlButtonText}>↩</Text>
+            <Pressable
+              onPress={undo}
+              accessibilityLabel="Geri al"
+              hitSlop={4}
+              style={({ pressed }) => [styles.controlButton, pressed && styles.controlButtonPressed]}
+            >
+              <Ionicons name="arrow-undo-outline" size={22} color={COURSE_BRAND.primary} />
             </Pressable>
-            <Pressable onPress={reset}
-              style={({ pressed }) => [styles.controlButton, pressed && styles.controlButtonPressed]}>
-              <Text style={styles.controlButtonText}>↺</Text>
+            <Pressable
+              onPress={reset}
+              accessibilityLabel="Sıfırla"
+              hitSlop={4}
+              style={({ pressed }) => [styles.controlButton, pressed && styles.controlButtonPressed]}
+            >
+              <Ionicons name="refresh-outline" size={22} color={COURSE_BRAND.primary} />
             </Pressable>
-            <Pressable onPress={showHint}
-              style={({ pressed }) => [styles.controlButton, pressed && styles.controlButtonPressed]}>
-              <Text style={styles.controlButtonText}>?</Text>
+            <Pressable
+              onPress={showHint}
+              accessibilityLabel="İpucu"
+              hitSlop={4}
+              style={({ pressed }) => [styles.controlButton, styles.hintButton, pressed && styles.controlButtonPressed]}
+            >
+              <Ionicons name="help-outline" size={22} color={COURSE_BRAND.accent} />
             </Pressable>
             {pausePhase === 'beforeOpponent' && (
-              <Pressable onPress={playOpponentResponse}
-                style={({ pressed }) => [styles.continueButton, pressed && styles.controlButtonPressed]}>
-                <Text style={styles.continueButtonText}>▶ Devam</Text>
+              <Pressable
+                onPress={playOpponentResponse}
+                accessibilityLabel="Devam"
+                style={({ pressed }) => [styles.continueButton, pressed && styles.controlButtonPressed]}
+              >
+                <Ionicons name="play" size={16} color="#fff" />
+                <Text style={styles.continueButtonText}>Devam</Text>
               </Pressable>
             )}
           </View>
@@ -811,46 +856,62 @@ export default function GoBoard({
   );
 }
 
+function statusTone(msg: string): 'success' | 'error' | 'info' {
+  const lower = msg.toLowerCase();
+  if (lower.startsWith('doğru') || lower.includes('doğru.')) return 'success';
+  if (
+    lower.includes('yanlış') ||
+    lower.includes('yasak') ||
+    lower.includes('ko kural')
+  ) return 'error';
+  return 'info';
+}
+
 const styles = StyleSheet.create({
   boardShell: {
     alignItems: 'center',
+    alignSelf: 'center',
   },
   statusSlot: {
-    height: 54,
-    minHeight: 54,
-    marginBottom: 6,
+    alignSelf: 'stretch',
+    minHeight: 40,
+    marginBottom: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    width: '100%',
+  },
+  statusSlotCollapsed: {
+    minHeight: 0,
+    height: 0,
+    marginBottom: 0,
+    overflow: 'hidden',
   },
   statusBanner: {
-    maxWidth: '96%',
-    minHeight: 38,
-    paddingHorizontal: 13,
-    paddingVertical: 7,
-    borderRadius: 16,
+    alignSelf: 'stretch',
+    minHeight: 36,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    boxShadow: '0px 4px 14px rgba(15,23,42,0.10)',
-  } as any,
+  },
   statusSuccess: {
-    backgroundColor: 'rgba(220,252,231,0.92)',
-    borderColor: 'rgba(74,222,128,0.45)',
+    backgroundColor: COURSE_BRAND.accentSoft,
+    borderColor: COURSE_BRAND.accentBorder,
   },
   statusError: {
-    backgroundColor: 'rgba(254,242,242,0.92)',
-    borderColor: 'rgba(252,165,165,0.55)',
+    backgroundColor: 'rgba(254,242,242,0.95)',
+    borderColor: 'rgba(248,113,113,0.35)',
   },
   statusInfo: {
-    backgroundColor: 'rgba(255,255,255,0.76)',
-    borderColor: 'rgba(15,23,42,0.08)',
+    backgroundColor: '#ffffff',
+    borderColor: 'rgba(15, 118, 110, 0.16)',
   },
   statusText: {
-    fontSize: 12,
-    lineHeight: 15,
-    fontWeight: '800',
-    color: '#374151',
+    fontSize: 13,
+    lineHeight: 17,
+    fontWeight: '600',
+    color: COURSE_BRAND.ink,
     letterSpacing: 0.1,
     textAlign: 'center',
   },
@@ -859,14 +920,12 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     backgroundColor: '#D4920F',
     overflow: 'hidden',
-    boxShadow: '0px 12px 24px rgba(15,23,42,0.22)',
-  } as any,
+  },
   controlsRow: {
-    width: '100%',
-    minHeight: 42,
-    marginTop: 8,
-    paddingHorizontal: 4,
+    alignSelf: 'stretch',
+    marginTop: 12,
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 10,
@@ -874,63 +933,65 @@ const styles = StyleSheet.create({
   turnBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.76)',
+    gap: 8,
+    borderRadius: 12,
+    backgroundColor: '#ffffff',
     borderWidth: 1,
-    borderColor: 'rgba(148,163,184,0.35)',
-    paddingHorizontal: 10,
-    paddingVertical: 7,
+    borderColor: COURSE_BRAND.accentBorder,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  turnStone: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    borderWidth: 1,
+    borderColor: 'rgba(148,163,184,0.7)',
   },
   turnText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#374151',
+    fontSize: 13,
+    fontWeight: '600',
+    color: COURSE_BRAND.muted,
   },
   controlGroup: {
     flexDirection: 'row',
-    gap: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.62)',
-    borderWidth: 1,
-    borderColor: 'rgba(148,163,184,0.25)',
-    paddingHorizontal: 8,
-    paddingVertical: 5,
+    gap: 12,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
   },
   controlButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#f8fafc',
-    borderWidth: 1,
-    borderColor: 'rgba(148,163,184,0.35)',
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: '#ffffff',
+    borderWidth: 1.5,
+    borderColor: 'rgba(10, 37, 64, 0.14)',
     alignItems: 'center',
     justifyContent: 'center',
-    boxShadow: '0px 3px 8px rgba(15,23,42,0.08)',
-  } as any,
-  controlButtonPressed: {
-    transform: [{ scale: 0.94 }],
-    backgroundColor: '#eef2ff',
   },
-  controlButtonText: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#64748b',
+  hintButton: {
+    borderColor: COURSE_BRAND.accentBorder,
+    backgroundColor: COURSE_BRAND.accentSoft,
+  },
+  controlButtonPressed: {
+    opacity: 0.82,
+    backgroundColor: COURSE_BRAND.pathTrack,
   },
   continueButton: {
-    height: 36,
-    paddingHorizontal: 13,
-    borderRadius: 18,
-    backgroundColor: '#f59e0b',
+    minHeight: 48,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    backgroundColor: COURSE_BRAND.accent,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    boxShadow: '0px 4px 10px rgba(245,158,11,0.25)',
-  } as any,
+    gap: 6,
+  },
   continueButtonText: {
-    fontSize: 12,
-    fontWeight: '900',
+    fontSize: 14,
+    fontWeight: '700',
     color: '#fff',
   },
 });
