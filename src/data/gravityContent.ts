@@ -52,6 +52,7 @@ export const instructorsData: InstructorProfile[] = [
     id: 'doganergezen',
     name: 'Doğan Ergezen',
     title: '3 Kyu',
+    avatar: require('../../assets/instructorphotos/doganergezen.jpeg'),
     location: 'İzmir, Türkiye',
     email: 'dogan@agorago.com',
     about: 'Yapay zeka mühendisi, Atölyeler ve tsumegoların oluşturulmasından sorumlu',

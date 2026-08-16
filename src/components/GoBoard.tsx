@@ -50,6 +50,8 @@ export interface GoBoardProps {
   /** Çözüm ağacı — problem modunda kullanılır */
   problem?: GoProblem | null;
   onSolve?: () => void;
+  /** Yanlış hamle yapıldığında çağrılır (doğru çözüm değil) */
+  onWrong?: () => void;
   /** true → taşlar yerleştirilemez, sadece gösterim */
   readOnly?: boolean;
   onTurnChange?: (turn: Color) => void;
@@ -349,6 +351,7 @@ export default function GoBoard({
   startTurn = 'black',
   problem,
   onSolve,
+  onWrong,
   readOnly = false,
   onTurnChange,
   onNodeChange,
@@ -481,7 +484,7 @@ export default function GoBoard({
       // checkStatus: wrong veya doğru leaf node kontrolü
       if (oppNode.status === 'wrong') {
         setStatusMsg(statusForNode(oppNode.comment, 'Yanlış hamle.'));
-        onSolve?.();
+        onWrong?.();
       } else if (oppNode.status === 'correct' || !oppNode.children?.length) {
         // Leaf node — doğru çözüm
         solvedRef.current = true;
@@ -585,7 +588,7 @@ export default function GoBoard({
           } else {
             // Yanlış leaf: hemen bildir
             setStatusMsg(statusForNode(matched.comment, 'Yanlış hamle.'));
-            onSolve?.();
+            onWrong?.();
           }
           return;
         }
@@ -613,10 +616,10 @@ export default function GoBoard({
       } else if (children.length > 0) {
         setCurrentNode(null);
         setStatusMsg('Yanlış hamle — serbest devam edebilirsiniz.');
-        onSolve?.();
+        onWrong?.();
       }
     }
-  }, [readOnly, pausePhase, grid, turn, size, boardHistory, hitTest, problem, onSolve, onTurnChange, playStoneSound, statusForNode, currentNode]);
+  }, [readOnly, pausePhase, grid, turn, size, boardHistory, hitTest, problem, onSolve, onWrong, onTurnChange, playStoneSound, statusForNode, currentNode]);
 
   const handleResponderRelease = useCallback(
     (evt: GestureResponderEvent) => {

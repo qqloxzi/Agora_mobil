@@ -9,6 +9,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
   Modal,
   Pressable, ScrollView,
   Text,
@@ -55,10 +56,12 @@ function getLessonIntroText(lesson: Lesson): string {
    SidebarMenu — ders listesi (modal içinde)
 ═══════════════════════════════════════════════════════════════ */
 function SidebarMenu({
-  course, selectedId, completedIds, onSelect,
+  course, selectedId, completedIds, unlockedIds, onSelect,
 }: {
   course: Course; selectedId: string | null;
-  completedIds: Set<string>; onSelect: (id: string) => void;
+  completedIds: Set<string>;
+  unlockedIds: Set<string>;
+  onSelect: (id: string) => void;
 }) {
   return (
     <ScrollView showsVerticalScrollIndicator={false}>
@@ -74,30 +77,36 @@ function SidebarMenu({
           {mod.lessons.map((lesson) => {
             const isSelected = lesson.id === selectedId;
             const isDone = completedIds.has(lesson.id);
+            const isUnlocked = unlockedIds.has(lesson.id);
             return (
-              <Pressable key={lesson.id} onPress={() => onSelect(lesson.id)}
+              <Pressable
+                key={lesson.id}
+                onPress={() => isUnlocked && onSelect(lesson.id)}
                 style={{
                   flexDirection: 'row', alignItems: 'center', gap: 10,
                   paddingHorizontal: 16, paddingVertical: 12,
                   borderRadius: 10,
+                  opacity: isUnlocked ? 1 : 0.4,
                   backgroundColor: isSelected ? COURSE_BRAND.accentSoft : 'transparent',
                 }}>
                 <View style={{
                   width: 22, height: 22, borderRadius: 11,
-                  backgroundColor: isDone ? COURSE_BRAND.accent : '#ffffff',
-                  borderWidth: isDone ? 0 : 2,
+                  backgroundColor: isDone ? COURSE_BRAND.accent : isUnlocked ? '#ffffff' : '#e5e7eb',
+                  borderWidth: isDone || !isUnlocked ? 0 : 2,
                   borderColor: '#d1d5db',
                   alignItems: 'center', justifyContent: 'center',
                 }}>
                   {isDone
                     ? <Ionicons name="checkmark" size={12} color="#fff" />
-                    : null
+                    : !isUnlocked
+                      ? <Ionicons name="lock-closed" size={11} color="#9ca3af" />
+                      : null
                   }
                 </View>
                 <Text numberOfLines={2} style={{
                   flex: 1, fontSize: 13,
                   fontWeight: isSelected ? '700' : '500',
-                  color: isSelected ? COURSE_BRAND.accent : isDone ? '#374151' : '#6b7280',
+                  color: isSelected ? COURSE_BRAND.accent : isDone ? '#374151' : isUnlocked ? '#6b7280' : '#9ca3af',
                 }}>
                   {lesson.title}
                 </Text>
@@ -131,20 +140,73 @@ function LessonContent({
     x: number; y: number; color: string; comment: string | null;
   } | null>(null);
   const solvedOnceRef = useRef(false);
+  // İlk mount'ta lesson.id effect'i GoBoard'un onNodeChange'ini geçersiz kılmasın.
+  // Sadece lesson gerçekten değiştiğinde (id farkı) sıfırlama yapılsın.
+  const prevLessonIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    setActiveNodeInfo(null);
-    solvedOnceRef.current = false;
-    onSolvedStateChange?.(completed);
+    if (prevLessonIdRef.current === null) {
+      // İlk mount: sadece solvedOnceRef'i sıfırla, activeNodeInfo'ya dokunma.
+      // GoBoard'un onNodeChange zaten ilk node'u iletecek.
+      prevLessonIdRef.current = lesson.id;
+      solvedOnceRef.current = false;
+      onSolvedStateChange?.(completed);
+      return;
+    }
+    if (prevLessonIdRef.current !== lesson.id) {
+      // Gerçek ders değişimi: paneli temizle.
+      prevLessonIdRef.current = lesson.id;
+      setActiveNodeInfo(null);
+      solvedOnceRef.current = false;
+      onSolvedStateChange?.(completed);
+    }
   }, [lesson.id, completed, onSolvedStateChange]);
+  const shakeAnim = useRef(new Animated.Value(0)).current;
+  const correctOpacity = useRef(new Animated.Value(0)).current;
+  const wrongOpacity = useRef(new Animated.Value(0)).current;
+  const [feedbackType, setFeedbackType] = useState<'correct' | 'wrong' | null>(null);
 
-  const handleSolve = useCallback(() => {
+  const triggerCorrect = useCallback(() => {
+    correctOpacity.setValue(0);
+    setFeedbackType('correct');
+    Animated.sequence([
+      Animated.timing(correctOpacity, { toValue: 1, duration: 180, useNativeDriver: true }),
+      Animated.delay(750),
+      Animated.timing(correctOpacity, { toValue: 0, duration: 280, useNativeDriver: true }),
+    ]).start(() => setFeedbackType(null));
+  }, [correctOpacity]);
+
+  const triggerWrong = useCallback(() => {
+    shakeAnim.setValue(0);
+    wrongOpacity.setValue(1);
+    setFeedbackType('wrong');
+    Animated.parallel([
+      Animated.sequence([
+        Animated.timing(shakeAnim, { toValue: 9, duration: 55, useNativeDriver: true }),
+        Animated.timing(shakeAnim, { toValue: -9, duration: 55, useNativeDriver: true }),
+        Animated.timing(shakeAnim, { toValue: 7, duration: 55, useNativeDriver: true }),
+        Animated.timing(shakeAnim, { toValue: -7, duration: 55, useNativeDriver: true }),
+        Animated.timing(shakeAnim, { toValue: 0, duration: 55, useNativeDriver: true }),
+      ]),
+      Animated.sequence([
+        Animated.delay(420),
+        Animated.timing(wrongOpacity, { toValue: 0, duration: 220, useNativeDriver: true }),
+      ]),
+    ]).start(() => setFeedbackType(null));
+  }, [shakeAnim, wrongOpacity]);
+
+  const handleSolveCorrect = useCallback(() => {
+    triggerCorrect();
     if (!solvedOnceRef.current) {
       solvedOnceRef.current = true;
       onSolved();
       onSolvedStateChange?.(true);
     }
-  }, [onSolved, onSolvedStateChange]);
+  }, [onSolved, onSolvedStateChange, triggerCorrect]);
+
+  const handleWrong = useCallback(() => {
+    triggerWrong();
+  }, [triggerWrong]);
 
   const handleNodeChange = useCallback((
     info: { x: number; y: number; comment: string | null; color: string | null } | null
@@ -163,7 +225,11 @@ function LessonContent({
 
   return (
     <View style={{ flex: 1, backgroundColor: '#f7f7f5' }}>
-      <View style={{ alignItems: 'center', paddingHorizontal: 12, paddingTop: isShortScreen ? 6 : 10 }}>
+      {/* Board area with shake on wrong */}
+      <Animated.View style={[
+        { alignItems: 'center', paddingHorizontal: 12, paddingTop: isShortScreen ? 6 : 10 },
+        { transform: [{ translateX: shakeAnim }] },
+      ]}>
         <View style={{
           alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center',
           justifyContent: 'space-between', marginBottom: 6, gap: 8,
@@ -198,12 +264,13 @@ function LessonContent({
             initialState={lesson.problem.initialState}
             startTurn={initialTurn}
             problem={lesson.problem}
-            onSolve={handleSolve}
+            onSolve={handleSolveCorrect}
+            onWrong={handleWrong}
             onNodeChange={handleNodeChange}
             hideTurnIndicator
           />
         )}
-      </View>
+      </Animated.View>
 
       <ScrollView
         style={{ flex: 1 }}
@@ -247,6 +314,44 @@ function LessonContent({
           ) : null}
         </View>
       </ScrollView>
+
+      {/* Correct feedback overlay */}
+      {feedbackType === 'correct' && (
+        <Animated.View style={{
+          position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+          alignItems: 'center', justifyContent: 'center',
+          opacity: correctOpacity, pointerEvents: 'none',
+        }}>
+          <View style={{
+            width: 88, height: 88, borderRadius: 44,
+            backgroundColor: 'rgba(22,163,74,0.93)',
+            alignItems: 'center', justifyContent: 'center',
+            shadowColor: '#16a34a', shadowOpacity: 0.45,
+            shadowRadius: 16, elevation: 8,
+          }}>
+            <Ionicons name="checkmark" size={52} color="#fff" />
+          </View>
+        </Animated.View>
+      )}
+
+      {/* Wrong feedback overlay */}
+      {feedbackType === 'wrong' && (
+        <Animated.View style={{
+          position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+          alignItems: 'center', justifyContent: 'center',
+          opacity: wrongOpacity, pointerEvents: 'none',
+        }}>
+          <View style={{
+            width: 88, height: 88, borderRadius: 44,
+            backgroundColor: 'rgba(220,38,38,0.90)',
+            alignItems: 'center', justifyContent: 'center',
+            shadowColor: '#dc2626', shadowOpacity: 0.4,
+            shadowRadius: 14, elevation: 8,
+          }}>
+            <Ionicons name="close" size={52} color="#fff" />
+          </View>
+        </Animated.View>
+      )}
     </View>
   );
 }
@@ -285,8 +390,22 @@ export default function AtolyelerKursScreen() {
     [flatLessons, selectedLessonId]
   );
   const lessonIndex = flatLessons.findIndex((l) => l.id === selectedLessonId);
+  /* Her dersin kilit durumunu hesapla:
+     - İlk ders her zaman açık
+     - Tamamlanmış dersler açık
+     - Bir önceki ders tamamlanmışsa sonraki açık
+  */
+  const unlockedIds = useMemo(() => {
+    const set = new Set<string>();
+    flatLessons.forEach((lesson, idx) => {
+      if (idx === 0 || completedIds.has(lesson.id) || completedIds.has(flatLessons[idx - 1]!.id)) {
+        set.add(lesson.id);
+      }
+    });
+    return set;
+  }, [flatLessons, completedIds]);
 
-  /* Veri yükle */
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -331,9 +450,12 @@ export default function AtolyelerKursScreen() {
   }, [loading, courses, slug, activeCourse, router]);
 
   const handleSelectLesson = useCallback((id: string) => {
+    // Kilit kontrolü: sadece açık derslere geçilebilir
+    const idx = flatLessons.findIndex((l) => l.id === id);
+    if (idx > 0 && !completedIds.has(flatLessons[idx - 1]!.id)) return;
     setSelectedLessonId(id);
     setSidebarOpen(false);
-  }, []);
+  }, [flatLessons, completedIds]);
 
   const handleSolved = useCallback(async () => {
     if (!currentLesson) return;
@@ -453,6 +575,7 @@ export default function AtolyelerKursScreen() {
             course={activeCourse}
             selectedId={selectedLessonId}
             completedIds={completedIds}
+            unlockedIds={unlockedIds}
             onSelect={handleSelectLesson}
           />
         </View>

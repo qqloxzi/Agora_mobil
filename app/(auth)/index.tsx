@@ -90,7 +90,7 @@ export default function LoginScreen() {
         showsVerticalScrollIndicator={false}>
 
         <View className="w-full items-center mb-12">
-          <Image source={require('../../public/background.png')} style={{ width: 140, height: 140 }} resizeMode="contain" />
+          <Image source={require('../../public/background.png')} style={{ width: 200, height: 200 }} resizeMode="contain" />
         </View>
 
         <TextInput

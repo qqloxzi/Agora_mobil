@@ -29,7 +29,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   // NativeWind'in setColorScheme'si dark: prefix sınıfları aktif eder
   const { setColorScheme } = useColorScheme();
 
-  const [themeMode, setThemeModeState] = useState<ThemeMode>('system');
+  const [themeMode, setThemeModeState] = useState<ThemeMode>('light');
   const [notificationsEnabled, setNotificationsState] = useState(true);
   const [loaded, setLoaded] = useState(false);
 
@@ -44,6 +44,9 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
         if (savedTheme === 'light' || savedTheme === 'dark' || savedTheme === 'system') {
           setThemeModeState(savedTheme);
           setColorScheme(savedTheme);
+        } else {
+          // Kayıtlı tercih yoksa varsayılan: light
+          setColorScheme('light');
         }
         if (savedNotif !== null) {
           setNotificationsState(savedNotif === 'true');
