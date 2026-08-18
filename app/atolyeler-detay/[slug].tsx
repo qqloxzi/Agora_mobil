@@ -128,7 +128,7 @@ export default function AtolyelerCourseDetailScreen() {
         className="flex-1 items-center justify-center bg-gray-50 dark:bg-dark-bg"
         style={{ paddingTop: insets.top }}
       >
-        <ActivityIndicator size="large" color={COURSE_BRAND.accent} />
+        <ActivityIndicator size="large" color="#2563EB" />
         <Text className="mt-3 text-slate-400 dark:text-slate-500">Atölye yükleniyor…</Text>
       </View>
     );
@@ -162,8 +162,19 @@ export default function AtolyelerCourseDetailScreen() {
       { type: 'board', description: 'Bu atölyenin ilk alıştırmasına ait statik konum.' },
     ];
 
+  // ── Blue accent colours for the detail page ──
+  const BLUE = {
+    accent:     '#1D4ED8',
+    accentSoft: 'rgba(29, 78, 216, 0.1)',
+    accentBorder:'rgba(29, 78, 216, 0.28)',
+    rank:       '#1D4ED8',
+    rankSoft:   'rgba(29, 78, 216, 0.1)',
+    rankBorder: 'rgba(29, 78, 216, 0.25)',
+    primary:    '#1D4ED8',
+  } as const;
+
   return (
-    <View className="flex-1 bg-gray-50 dark:bg-dark-bg">
+    <View style={{ flex: 1, backgroundColor: '#EFF6FF' }} className="dark:bg-dark-bg">
       <CourseDetailHeader
         title="Atölye Detayı"
         topInset={insets.top}
@@ -208,12 +219,12 @@ export default function AtolyelerCourseDetailScreen() {
             <View
               className="flex-row items-center gap-1.5 rounded-full border px-3 py-1.5"
               style={{
-                backgroundColor: COURSE_BRAND.rankSoft,
-                borderColor: COURSE_BRAND.rankBorder,
+                backgroundColor: BLUE.rankSoft,
+                borderColor: BLUE.rankBorder,
               }}
             >
-              <Ionicons name="time-outline" size={13} color={COURSE_BRAND.rank} />
-              <Text style={{ color: COURSE_BRAND.rank, fontSize: 12, fontWeight: '700' }}>
+              <Ionicons name="time-outline" size={13} color={BLUE.rank} />
+              <Text style={{ color: BLUE.rank, fontSize: 12, fontWeight: '700' }}>
                 {duration}
               </Text>
             </View>
@@ -227,10 +238,14 @@ export default function AtolyelerCourseDetailScreen() {
           ))}
         </CourseSectionCard>
 
-        <CoursePrimaryCta
-          title="Alıştırmalara başla"
+        <Pressable
           onPress={() => router.push(`/atolyeler/${course.slug || course.id}`)}
-        />
+          accessibilityRole="button"
+          className="w-full items-center rounded-2xl py-4 active:opacity-90"
+          style={{ backgroundColor: BLUE.primary }}
+        >
+          <Text className="text-base font-bold text-white">Alıştırmalara başla</Text>
+        </Pressable>
       </ScrollView>
     </View>
   );
