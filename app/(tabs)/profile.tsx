@@ -36,7 +36,7 @@ import {
   fetchProfileOnboarding,
 } from '../../src/lib/profileOnboarding';
 import { signInWithGoogle } from '../../src/lib/googleSignIn';
-import { SOCIAL_LINKS } from '../../src/constants/socialLinks';
+import { LEGAL_LINKS, SOCIAL_LINKS } from '../../src/constants/socialLinks';
 
 type ProfileFields = {
   preferredName: string | null;
@@ -429,6 +429,38 @@ function SettingsSection() {
           trackColor={{ false: '#e2e8f0', true: '#bfdbfe' }}
           thumbColor={notificationsEnabled ? '#1d4ed8' : '#94a3b8'}
         />
+      </View>
+
+      {/* Yasal bağlantılar (Play politikası) */}
+      <View className="mt-3 border-t border-slate-100 dark:border-dark-border pt-3 gap-1">
+        <Pressable
+          onPress={() => void Linking.openURL(LEGAL_LINKS.privacyPolicy)}
+          accessibilityRole="link"
+          accessibilityLabel="Gizlilik Politikası"
+          className="flex-row items-center justify-between py-2.5 active:opacity-70"
+        >
+          <View className="flex-row items-center gap-2">
+            <Ionicons name="shield-checkmark-outline" size={16} color="#64748b" />
+            <Text className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+              Gizlilik Politikası
+            </Text>
+          </View>
+          <Ionicons name="open-outline" size={14} color="#94a3b8" />
+        </Pressable>
+        <Pressable
+          onPress={() => void Linking.openURL(LEGAL_LINKS.accountDeletion)}
+          accessibilityRole="link"
+          accessibilityLabel="Hesabımı Sil"
+          className="flex-row items-center justify-between py-2.5 active:opacity-70"
+        >
+          <View className="flex-row items-center gap-2">
+            <Ionicons name="trash-outline" size={16} color="#ef4444" />
+            <Text className="text-sm font-semibold text-red-500 dark:text-red-400">
+              Hesabımı Sil
+            </Text>
+          </View>
+          <Ionicons name="open-outline" size={14} color="#94a3b8" />
+        </Pressable>
       </View>
     </View>
   );

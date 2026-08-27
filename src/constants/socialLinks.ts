@@ -7,3 +7,9 @@ export const SOCIAL_LINKS = {
   youtube: 'https://www.youtube.com/@Agoragoakademisi',
   whatsapp: 'https://chat.whatsapp.com/GwdRT7o2wvcFmUx8vWkSk4',
 } as const;
+
+/** Play Console / in-app legal pages (GitHub Pages). */
+export const LEGAL_LINKS = {
+  privacyPolicy: 'https://qqloxzi.github.io/Agora-legal-pages/privacy-policy/',
+  accountDeletion: 'https://qqloxzi.github.io/Agora-legal-pages/account-deletion/',
+} as const;
