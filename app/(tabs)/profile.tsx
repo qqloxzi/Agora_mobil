@@ -117,14 +117,9 @@ export default function ProfileScreen() {
     }
     
     loadStats();
-    
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
-       loadStats();
-    });
-    
+
     return () => {
-       cancelled = true;
-       subscription.unsubscribe();
+      cancelled = true;
     };
   }, [user]);
 
@@ -136,6 +131,40 @@ export default function ProfileScreen() {
   const handleUpdateClick = () => {
     enterEditModeUi();
     router.push({ pathname: '/onboarding', params: { edit: '1' } });
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Hesabı Sil',
+      'Hesabınızı kalıcı olarak silmek istediğinizden emin misiniz? Bu işlem geri alınamaz ve tüm verileriniz silinecektir.',
+      [
+        { text: 'Vazgeç', style: 'cancel' },
+        {
+          text: 'Evet, Hesabımı Sil',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const { error } = await supabase.rpc('delete_user');
+              if (error) throw error;
+              resetOnboarding();
+              await supabase.auth.signOut();
+            } catch {
+              Alert.alert(
+                'Hata',
+                'Hesap şu an silinemiyor. Web üzerinden silme talebinde bulunmak ister misiniz?',
+                [
+                  { text: 'Vazgeç', style: 'cancel' },
+                  {
+                    text: "Web'den Sil",
+                    onPress: () => void Linking.openURL(LEGAL_LINKS.accountDeletion),
+                  },
+                ]
+              );
+            }
+          },
+        },
+      ]
+    );
   };
 
   if (!isInitialized) {
@@ -276,11 +305,11 @@ export default function ProfileScreen() {
       {/* ── Atölye Progress ── */}
       <AtolyeProgressChart progress={atolyeProgress} />
 
-      {/* ── Settings ── */}
-      <SettingsSection />
-
       {/* ── Planlar ── */}
       <PlansSection />
+
+      {/* ── Settings (yasal / hesap) ── */}
+      <SettingsSection onDeleteAccount={handleDeleteAccount} />
 
       {/* ── Sign Out ── */}
       <View className="mt-4">
@@ -368,7 +397,7 @@ function AtolyeProgressChart({ progress }: { progress: AtolyeProgressSummary[] }
   );
 }
 
-function SettingsSection() {
+function SettingsSection({ onDeleteAccount }: { onDeleteAccount: () => void }) {
   const { themeMode, notificationsEnabled, setThemeMode, setNotificationsEnabled } = useSettings();
 
   const THEME_OPTIONS: { label: string; value: ThemeMode; icon: string }[] = [
@@ -448,8 +477,8 @@ function SettingsSection() {
           <Ionicons name="open-outline" size={14} color="#94a3b8" />
         </Pressable>
         <Pressable
-          onPress={() => void Linking.openURL(LEGAL_LINKS.accountDeletion)}
-          accessibilityRole="link"
+          onPress={onDeleteAccount}
+          accessibilityRole="button"
           accessibilityLabel="Hesabımı Sil"
           className="flex-row items-center justify-between py-2.5 active:opacity-70"
         >
@@ -459,7 +488,7 @@ function SettingsSection() {
               Hesabımı Sil
             </Text>
           </View>
-          <Ionicons name="open-outline" size={14} color="#94a3b8" />
+          <Ionicons name="chevron-forward-outline" size={14} color="#94a3b8" />
         </Pressable>
       </View>
     </View>

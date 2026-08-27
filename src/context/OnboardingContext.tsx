@@ -66,7 +66,6 @@ type OnboardingContextType = {
   syncOnboardingFromRemote: (row: any) => void;
   hydrateForEdit: (partialAnswers: Partial<OnboardingAnswers>) => void;
   enterEditModeUi: () => void;
-  isComplete: boolean;
   isCompleted: boolean;
 };
 
@@ -411,7 +410,6 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
       syncOnboardingFromRemote,
       hydrateForEdit,
       enterEditModeUi,
-      isComplete: status === 'done' || Boolean(completedAt),
       isCompleted: status === 'done' || Boolean(completedAt),
     }),
     [
