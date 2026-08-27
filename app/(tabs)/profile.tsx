@@ -133,7 +133,41 @@ export default function ProfileScreen() {
     router.push({ pathname: '/onboarding', params: { edit: '1' } });
   };
 
+  const executeAccountDeletion = async () => {
+    try {
+      const { error } = await supabase.rpc('delete_user');
+      if (error) {
+        console.error('[delete_user] RPC hatası:', JSON.stringify(error));
+        throw error;
+      }
+      resetOnboarding();
+      await supabase.auth.signOut();
+    } catch (err: any) {
+      const msg =
+        err?.message ||
+        err?.details ||
+        (typeof err === 'string' ? err : 'Bilinmeyen hata');
+      console.error('[delete_user] Yakalanan hata:', msg);
+      Alert.alert(
+        'Hesap Silinemiyor',
+        `Hata: ${msg}`,
+        [{ text: 'Tamam', style: 'cancel' }]
+      );
+    }
+  };
+
   const handleDeleteAccount = () => {
+    console.log('[delete_user] Silme başlatıldı, platform:', Platform.OS);
+
+    // Web tarayıcıda Alert.alert engellenebildiği için window.confirm kullan
+    if (Platform.OS === 'web') {
+      const confirmed = window.confirm(
+        'Hesabınızı kalıcı olarak silmek istediğinizden emin misiniz?\nBu işlem geri alınamaz ve tüm verileriniz silinecektir.'
+      );
+      if (confirmed) void executeAccountDeletion();
+      return;
+    }
+
     Alert.alert(
       'Hesabı Sil',
       'Hesabınızı kalıcı olarak silmek istediğinizden emin misiniz? Bu işlem geri alınamaz ve tüm verileriniz silinecektir.',
@@ -142,26 +176,7 @@ export default function ProfileScreen() {
         {
           text: 'Evet, Hesabımı Sil',
           style: 'destructive',
-          onPress: async () => {
-            try {
-              const { error } = await supabase.rpc('delete_user');
-              if (error) throw error;
-              resetOnboarding();
-              await supabase.auth.signOut();
-            } catch {
-              Alert.alert(
-                'Hata',
-                'Hesap şu an silinemiyor. Web üzerinden silme talebinde bulunmak ister misiniz?',
-                [
-                  { text: 'Vazgeç', style: 'cancel' },
-                  {
-                    text: "Web'den Sil",
-                    onPress: () => void Linking.openURL(LEGAL_LINKS.accountDeletion),
-                  },
-                ]
-              );
-            }
-          },
+          onPress: () => void executeAccountDeletion(),
         },
       ]
     );
