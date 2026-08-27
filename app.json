@@ -39,6 +39,11 @@
     "experiments": {
       "typedRoutes": true
     },
+    "updates": {
+      "enabled": false,
+      "checkAutomatically": "NEVER",
+      "fallbackToCacheTimeout": 0
+    },
 
     "extra": {
       "router": {},
